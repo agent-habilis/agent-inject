@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use agent_inject_proto::lookup::RelayChoice;
 use agent_inject_proto::{
-    InjectTicket, SECRET_LEN, UPLOAD_ALPN, UPLOAD_ID_LEN, WEBRTC_SIGNAL_ALPN,
+    InjectTicket, SECRET_LEN, TRANSPORT, UPLOAD_ALPN, UPLOAD_ID_LEN, WEBRTC_SIGNAL_ALPN,
 };
 use fofoca::iroh::endpoint::{Connection, presets};
 use fofoca::iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey, TransportAddr};
@@ -29,11 +29,13 @@ const PATH_SETTLE_MS: f64 = 3_000.0;
 pub struct InjectClient {
     connection: Connection,
     secret: [u8; SECRET_LEN],
+    /// `webrtc` or `relay`: the path the upload connection rides.
+    data_path: &'static str,
     // Held so the transport and both endpoints live as long as the client.
     endpoint: Endpoint,
     signal_endpoint: Endpoint,
     _hub: Arc<BrowserHubTransport>,
-    _session: BrowserSession,
+    _session: Option<BrowserSession>,
 }
 
 #[wasm_bindgen]
@@ -50,15 +52,25 @@ impl InjectClient {
             .map_err(|error| err("decode ticket", &error))
     }
 
-    /// Dial the receiver named by `ticket`.
+    /// Dial the receiver named by `ticket`: over a WebRTC data channel, or
+    /// over the relay when that fails (see [`TRANSPORT`]). `relay_only`
+    /// skips WebRTC, to test the fallback from a network where ICE works.
     ///
     /// # Errors
-    /// The ticket does not decode, the signalling fails, or the upload
-    /// connection does not settle on the WebRTC data channel.
-    pub async fn connect(ticket: String) -> Result<InjectClient, JsValue> {
+    /// The ticket does not decode, or neither path connects.
+    pub async fn connect(
+        ticket: String,
+        relay_only: Option<bool>,
+    ) -> Result<InjectClient, JsValue> {
         console_error_panic_hook::set_once();
         let ticket = InjectTicket::decode(&ticket).map_err(|error| err("decode ticket", &error))?;
-        connect_webrtc(ticket).await
+        connect_any(ticket, relay_only.unwrap_or(false)).await
+    }
+
+    /// `webrtc` or `relay`: the path the upload connection rides.
+    #[wasm_bindgen(js_name = dataPath)]
+    pub fn data_path(&self) -> String {
+        self.data_path.to_owned()
     }
 
     /// Stream `blob` to the receiver under `name`. `upload_id` is 16 random
@@ -107,20 +119,22 @@ impl InjectClient {
     }
 }
 
-/// Signal over the relay, then dial the upload ALPN over the data channel.
+/// Bind the two endpoints, then connect on the first path [`TRANSPORT`]
+/// allows that works: the data channel, then the relay.
 ///
 /// **Two** endpoints on one key, and the split is what puts bytes on the data
 /// channel at all. The JSEP exchange rides the relay, so after it the signal
 /// endpoint's address book holds a warm relay path to the receiver; iroh only
 /// fans a connect out while the remote has no selected path, so a second dial
 /// on that endpoint would ride the relay. The upload endpoint has no relay and
-/// (in a tab) no IP, so the data channel is its only path.
+/// (in a tab) no IP, so the data channel is its only path. That warm relay
+/// path is exactly what the fallback wants, so the fallback dials on the
+/// signal endpoint.
 ///
 /// Only the signal endpoint may hold the relay: two same-key endpoints both
 /// registering with one relay fight over the registration and ICE never
 /// completes.
-async fn connect_webrtc(ticket: InjectTicket) -> Result<InjectClient, JsValue> {
-    let receiver = ticket.addr.id;
+async fn connect_any(ticket: InjectTicket, relay_only: bool) -> Result<InjectClient, JsValue> {
     ensure_reachable_addr(&ticket.addr)?;
 
     let key = SecretKey::generate();
@@ -147,46 +161,83 @@ async fn connect_webrtc(ticket: InjectTicket) -> Result<InjectClient, JsValue> {
     };
     let (signal_endpoint, endpoint) = futures::future::try_join(signal_bind, upload_bind).await?;
 
-    let session = match negotiate(&signal_endpoint, ticket.addr.clone(), local, &hub).await {
-        Ok(session) => session,
+    let webrtc = if relay_only || !TRANSPORT.webrtc {
+        Err(JsValue::from_str("skipped"))
+    } else {
+        dial_webrtc(&signal_endpoint, &endpoint, &hub, &ticket, local).await
+    };
+    let (connection, session, data_path) = match webrtc {
+        Ok((connection, session)) => (connection, Some(session), "webrtc"),
+        Err(webrtc_error) if TRANSPORT.relay_transport => {
+            web_sys::console::warn_1(&JsValue::from_str(&format!(
+                "[agent-inject] WebRTC failed, using the relay: {}",
+                describe(&webrtc_error)
+            )));
+            match signal_endpoint
+                .connect(ticket.addr.clone(), UPLOAD_ALPN)
+                .await
+            {
+                Ok(connection) => (connection, None, "relay"),
+                Err(error) => {
+                    endpoint.close().await;
+                    signal_endpoint.close().await;
+                    return Err(JsValue::from_str(&format!(
+                        "WebRTC failed ({}), and the relay failed too ({error})",
+                        describe(&webrtc_error)
+                    )));
+                }
+            }
+        }
         Err(error) => {
             endpoint.close().await;
             signal_endpoint.close().await;
             return Err(error);
         }
     };
-
-    let webrtc_only =
-        EndpointAddr::from_parts(receiver, [TransportAddr::Custom(custom_addr(receiver))]);
-    let connection = match endpoint.connect(webrtc_only, UPLOAD_ALPN).await {
-        Ok(connection) => connection,
-        Err(error) => {
-            endpoint.close().await;
-            signal_endpoint.close().await;
-            return Err(err("dial the upload ALPN over WebRTC", &error));
-        }
-    };
-    // The *selected* path, not "a WebRTC path exists": a connection can hold
-    // a path it does not send on.
-    let selected = settled_path_label(&connection).await;
-    if selected.as_deref() != Some("webrtc") {
-        let observed = path_labels(&connection);
-        endpoint.close().await;
-        signal_endpoint.close().await;
-        return Err(JsValue::from_str(&format!(
-            "connected but selected {} rather than WebRTC (paths={observed:?}); \
-             the relay does not carry file data",
-            selected.as_deref().unwrap_or("no path"),
-        )));
-    }
     Ok(InjectClient {
         connection,
         secret: ticket.secret,
+        data_path,
         endpoint,
         signal_endpoint,
         _hub: hub,
         _session: session,
     })
+}
+
+/// Negotiate a data channel, then dial the upload ALPN over it alone.
+async fn dial_webrtc(
+    signal_endpoint: &Endpoint,
+    endpoint: &Endpoint,
+    hub: &BrowserHubTransport,
+    ticket: &InjectTicket,
+    local: EndpointId,
+) -> Result<(Connection, BrowserSession), JsValue> {
+    let receiver = ticket.addr.id;
+    let session = negotiate(signal_endpoint, ticket.addr.clone(), local, hub).await?;
+    let webrtc_only =
+        EndpointAddr::from_parts(receiver, [TransportAddr::Custom(custom_addr(receiver))]);
+    let connection = endpoint
+        .connect(webrtc_only, UPLOAD_ALPN)
+        .await
+        .map_err(|error| err("dial the upload ALPN over WebRTC", &error))?;
+    // The *selected* path, not "a WebRTC path exists": a connection can hold
+    // a path it does not send on.
+    let selected = settled_path_label(&connection).await;
+    if selected.as_deref() != Some("webrtc") {
+        let observed = path_labels(&connection);
+        connection.close(0u32.into(), b"not webrtc");
+        return Err(JsValue::from_str(&format!(
+            "connected but selected {} rather than WebRTC (paths={observed:?})",
+            selected.as_deref().unwrap_or("no path"),
+        )));
+    }
+    Ok((connection, session))
+}
+
+/// A `JsValue` error as one line of prose.
+fn describe(error: &JsValue) -> String {
+    error.as_string().unwrap_or_else(|| format!("{error:?}"))
 }
 
 fn ensure_reachable_addr(addr: &EndpointAddr) -> Result<(), JsValue> {

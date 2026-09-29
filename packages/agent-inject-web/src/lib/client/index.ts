@@ -8,15 +8,26 @@ import { loadWasm } from 'agent-inject-wasm'
 import type { Uploader } from '../upload-queue/index.ts'
 
 export interface Connection extends Uploader {
+  /** `webrtc` or `relay`: the path the uploads ride. */
+  readonly dataPath: string
   /** Resolves with the reason when the connection ends. */
   closed(): Promise<string>
   close(): Promise<void>
 }
 
+/**
+ * `?transport=relay` skips WebRTC, to test the relay fallback from a network
+ * where ICE works. A debugging switch, so it rides the query string.
+ */
+export function relayOnly(search: string = window.location.search): boolean {
+  return new URLSearchParams(search).get('transport') === 'relay'
+}
+
 export async function connect(ticket: string): Promise<Connection> {
   const wasm = await loadWasm()
-  const client = await wasm.InjectClient.connect(ticket)
+  const client = await wasm.InjectClient.connect(ticket, relayOnly())
   return {
+    dataPath: client.dataPath(),
     upload: (name, blob, uploadId, onProgress) => client.upload(name, blob, uploadId, onProgress),
     closed: () => client.closed(),
     close: () => client.close(),

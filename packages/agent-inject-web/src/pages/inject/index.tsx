@@ -24,7 +24,7 @@ const MAX_FAILED_DIALS = 4
 
 type Phase =
   | { kind: 'connecting' }
-  | { kind: 'connected' }
+  | { kind: 'connected'; dataPath: string }
   | { kind: 'reconnecting'; reason: string }
   | { kind: 'failed'; reason: string }
 
@@ -93,7 +93,7 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
       }
       failures = 0
       connection = opened
-      phase.value = { kind: 'connected' }
+      phase.value = { kind: 'connected', dataPath: opened.dataPath }
       queue.retryFailed()
       queue.setUploader(opened)
       const reason = await opened.closed()
@@ -124,7 +124,7 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
       case 'connecting':
         return <Text color="fgMuted">connecting…</Text>
       case 'connected':
-        return <Text color="success">connected</Text>
+        return <Text color="success">connected ({current.dataPath})</Text>
       case 'reconnecting':
         return (
           <Text color="warning" class="selectable">

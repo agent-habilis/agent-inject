@@ -39,6 +39,7 @@ function fakeConnection(): FakeConnection {
   })
   const uploads: string[] = []
   return {
+    dataPath: 'relay',
     uploads,
     drop: (reason) => drop(reason),
     upload: (name) => {
@@ -83,7 +84,7 @@ test('picked files upload once connected, and a dropped link redials', async () 
     host,
   )
   await settle()
-  expect(host.textContent).toContain('connected')
+  expect(host.textContent).toContain('connected (relay)')
 
   host.querySelector<HTMLElement>('[data-testid="add-file"]')?.click()
   const input = document.querySelector<HTMLInputElement>('input[type=file]')
