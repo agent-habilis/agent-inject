@@ -7,8 +7,8 @@ use std::sync::Arc;
 use agent_inject_proto::lookup::LookupOpts;
 use agent_inject_proto::{InjectTicket, SECRET_LEN, UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN};
 use anyhow::{Context, Result, bail};
-use fofoca::iroh::SecretKey;
 use fofoca::iroh::protocol::Router;
+use fofoca::iroh::{EndpointAddr, SecretKey};
 use fofoca_iroh_webrtc_transport::{IceConfig, WebRtcHandle, WebRtcTransport};
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
@@ -58,16 +58,22 @@ pub async fn serve_with(opts: ServeOpts) -> Result<Session> {
     let webrtc = WebRtcHandle::new(WebRtcTransport::new(key.public()));
     let endpoint = build_endpoint(&opts.lookups, key, Some(&webrtc)).await?;
     debug_assert_eq!(endpoint.id(), webrtc.transport().local_id());
-    if !opts.lookups.is_loopback() {
+    let addr = if opts.lookups.is_loopback() {
+        endpoint.addr()
+    } else {
         wait_online(&endpoint).await;
-        if endpoint.addr().relay_urls().next().is_none() {
+        let Some(relay) = endpoint.addr().relay_urls().next().cloned() else {
             bail!("could not reach a relay; a browser has no other way to find this session");
-        }
-    }
+        };
+        // A browser has no UDP socket, so IP addresses in the ticket are
+        // useless to it. Leaving them out keeps the URL (and so the QR code)
+        // short, and keeps this machine's public IP out of a shared link.
+        EndpointAddr::new(endpoint.id()).with_relay_url(relay)
+    };
 
     let secret: [u8; SECRET_LEN] = rand::random();
     let ticket = InjectTicket {
-        addr: endpoint.addr(),
+        addr,
         secret,
         lookups: opts.lookups,
     };
