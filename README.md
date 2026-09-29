@@ -65,6 +65,31 @@ AGENT_INJECT_WEB_ORIGIN=http://localhost:3417 cargo run -- /tmp/inbox
 
 The camera needs a secure context. `localhost` is one. A phone needs HTTPS.
 
+### Test on your phone
+
+Prerequisites:
+
+- Tailscale runs on this machine and on the phone, in the same tailnet.
+- HTTPS certificates are enabled for the tailnet (Tailscale admin console, DNS
+  page).
+
+```sh
+bun run dev:phone [dir]    # dir defaults to /tmp/agent-inject-inbox
+```
+
+1. The command starts the dev server and publishes it on the tailnet at
+   `https://<this machine>:8443`. Only devices in the tailnet can open it.
+2. Then it runs `agent-inject <dir>` and prints the link and the QR code.
+3. Scan the QR code with the phone.
+4. Press ctrl-c to stop. The command stops everything and removes the
+   `tailscale serve` entry.
+
+Hot reload works on the phone. Only the page goes through `tailscale serve`.
+The files go over WebRTC.
+
+If port 8443 is already served, the command stops and changes nothing. Look at
+`tailscale serve status`.
+
 ### Layout
 
 | Path | What it is |

@@ -8,7 +8,8 @@
     "start": "bun scripts/start.ts",
     "build": "bun scripts/build.ts",
     "typecheck": "bun scripts/gen-wasm-path.ts && bun run --filter '*' typecheck",
-    "test": "bun scripts/gen-wasm-path.ts && bun test"
+    "test": "bun scripts/gen-wasm-path.ts && bun test && bun test ./scripts",
+    "dev:phone": "bun scripts/dev-phone.ts"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.11.1",
