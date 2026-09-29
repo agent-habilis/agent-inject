@@ -39,6 +39,9 @@ pub const TRANSPORT: TransportPolicy = TransportPolicy {
     relay_transport: true,
 };
 
+// Pinned at compile time: a change to the policy must be deliberate.
+const _: () = assert!(TRANSPORT.webrtc && TRANSPORT.relay_transport && !TRANSPORT.udp);
+
 /// Bearer secret carried by the ticket and presented on every upload.
 pub const SECRET_LEN: usize = 32;
 
@@ -242,7 +245,7 @@ impl Response {
 mod tests {
     use super::{
         MAX_MESSAGE_BYTES, MAX_NAME_BYTES, REQUEST_PREFIX_LEN, RequestHeader, Response, Status,
-        TRANSPORT, UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN, remaining_header_len,
+        UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN, remaining_header_len,
     };
 
     fn header(name: &str) -> RequestHeader {
@@ -252,13 +255,6 @@ mod tests {
             name: name.to_owned(),
             size: 0x0102_0304_0506_0708,
         }
-    }
-
-    #[test]
-    fn payload_rides_webrtc_then_the_relay() {
-        assert!(TRANSPORT.webrtc);
-        assert!(TRANSPORT.relay_transport);
-        assert!(!TRANSPORT.udp, "a browser has no UDP");
     }
 
     #[test]
