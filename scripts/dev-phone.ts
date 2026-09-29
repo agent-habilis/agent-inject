@@ -173,7 +173,9 @@ async function main(): Promise<void> {
   const dev = Bun.spawn(['bun', '--hot', 'scripts/dev.ts'], {
     cwd: REPO_ROOT,
     env: { ...process.env, PORT: String(DEV_PORT) },
-    stdout: 'ignore',
+    // The dev server echoes the browser's console here, which is the only
+    // way to see what the phone's page logs.
+    stdout: 'inherit',
     stderr: 'inherit',
   })
   let published = false
