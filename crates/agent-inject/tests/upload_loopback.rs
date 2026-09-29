@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use agent_inject::test_support::{ServeOpts, Session, loopback_sender, serve_with, upload};
+use agent_inject::test_support::{ServeOpts, Session, finish, loopback_sender, serve_with, upload};
 use agent_inject_proto::lookup::LookupOpts;
 use agent_inject_proto::{RequestHeader, Status, UPLOAD_ALPN};
 use fofoca::iroh::Endpoint;
@@ -172,5 +172,34 @@ async fn reset_mid_body_leaves_nothing_and_the_connection_lives() {
         .unwrap();
     assert_eq!(response.status, Status::Ok);
     assert!(session.saved.recv().await.unwrap().ends_with("next.txt"));
+    session.shutdown().await;
+}
+
+#[tokio::test]
+async fn done_signal_finishes_the_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut session = session(dir.path()).await;
+    let (_endpoint, conn) = connect(&session).await;
+    for (index, name) in ["a.txt", "b.txt"].into_iter().enumerate() {
+        let header = header(&session, name, u8::try_from(index).unwrap(), 1);
+        assert_eq!(
+            upload(&conn, &header, b"x").await.unwrap().status,
+            Status::Ok
+        );
+    }
+    let response = finish(&conn, &session.ticket.secret).await.unwrap();
+    assert_eq!(response.status, Status::Ok);
+    assert_eq!(response.message, "2");
+    tokio::time::timeout(Duration::from_secs(5), session.finished())
+        .await
+        .expect("the done signal wakes the session");
+    assert_eq!(
+        session.saved.recv().await.unwrap().file_name().unwrap(),
+        "a.txt"
+    );
+    assert_eq!(
+        session.saved.recv().await.unwrap().file_name().unwrap(),
+        "b.txt"
+    );
     session.shutdown().await;
 }

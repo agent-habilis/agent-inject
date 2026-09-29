@@ -113,3 +113,18 @@ test('retryFailed puts every failed file back in line after a reconnect', async 
   q.setUploader(second.uploader)
   expect(second.calls.map((call) => call.name)).toEqual(['a', 'b'])
 })
+
+test('idle means nothing is queued or uploading; failures do not count', async () => {
+  const { queue: q } = queue(1)
+  expect(q.idle).toBe(true)
+  const { uploader, calls } = manualUploader()
+  q.add(files('a', 'b'))
+  expect(q.idle).toBe(false)
+  q.setUploader(uploader)
+  calls[0]?.resolve('a')
+  await tick()
+  expect(q.idle).toBe(false)
+  calls[1]?.reject(new Error('lost'))
+  await tick()
+  expect(q.idle).toBe(true)
+})

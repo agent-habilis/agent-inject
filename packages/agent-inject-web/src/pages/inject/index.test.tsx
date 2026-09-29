@@ -29,6 +29,7 @@ const settle = async (): Promise<void> => {
 
 interface FakeConnection extends Connection {
   uploads: string[]
+  finishes: number
   drop(reason: string): void
 }
 
@@ -38,10 +39,15 @@ function fakeConnection(): FakeConnection {
     drop = resolve
   })
   const uploads: string[] = []
-  return {
+  const connection: FakeConnection = {
     dataPath: 'relay',
     uploads,
+    finishes: 0,
     drop: (reason) => drop(reason),
+    finish: () => {
+      connection.finishes += 1
+      return Promise.resolve(uploads.length)
+    },
     upload: (name) => {
       uploads.push(name)
       return Promise.resolve(name)
@@ -49,6 +55,23 @@ function fakeConnection(): FakeConnection {
     closed: () => closed,
     close: () => Promise.resolve(),
   }
+  return connection
+}
+
+function doneButton(): HTMLButtonElement {
+  const button = host.querySelector<HTMLButtonElement>('[data-testid="done"]')
+  if (!button) throw new Error('no done button')
+  return button
+}
+
+function pick(names: string[]): void {
+  host.querySelector<HTMLElement>('[data-testid="add-file"]')?.click()
+  const input = [...document.querySelectorAll<HTMLInputElement>('input[type=file]')].pop()
+  Object.defineProperty(input, 'files', {
+    value: names.map((name) => new File([name], name)),
+    configurable: true,
+  })
+  input?.dispatchEvent(new Event('change'))
 }
 
 test('an invalid link fails without dialling', async () => {
@@ -106,4 +129,49 @@ test('picked files upload once connected, and a dropped link redials', async () 
   await settle()
   expect(connections).toHaveLength(2)
   expect(host.textContent).toContain('connected')
+})
+
+test('Done waits for uploads, finishes the session, and stops redialling', async () => {
+  const connections: FakeConnection[] = []
+  let release: () => void = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  root = render(
+    InjectSession({
+      ticket: '3xYz',
+      connect: () => {
+        const opened = fakeConnection()
+        const upload = opened.upload
+        opened.upload = async (...args) => {
+          await held
+          return upload(...args)
+        }
+        connections.push(opened)
+        return Promise.resolve(opened)
+      },
+    }),
+    host,
+  )
+  await settle()
+  expect(doneButton().disabled).toBe(false)
+
+  pick(['a.txt'])
+  await settle()
+  expect(doneButton().disabled).toBe(true)
+
+  release()
+  await settle()
+  expect(doneButton().disabled).toBe(false)
+
+  doneButton().click()
+  await settle()
+  expect(connections[0]?.finishes).toBe(1)
+  expect(host.textContent).toContain('Finished — 1 file sent')
+  expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
+
+  // The receiver closes the connection after done; that is not a drop.
+  connections[0]?.drop('closed by peer')
+  await settle()
+  expect(connections).toHaveLength(1)
 })

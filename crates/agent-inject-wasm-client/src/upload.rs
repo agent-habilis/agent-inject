@@ -83,6 +83,38 @@ pub(crate) async fn send(
     }
 }
 
+/// Tell the receiver the sender has nothing more to send. Resolves with how
+/// many files the session saved.
+pub(crate) async fn send_done(
+    conn: &Connection,
+    secret: &[u8; SECRET_LEN],
+) -> Result<u32, JsValue> {
+    let (mut send, mut recv) = conn
+        .open_bi()
+        .await
+        .map_err(|error| err("open done stream", &error))?;
+    send.write_all(&agent_inject_proto::framing::encode_done(secret))
+        .await
+        .map_err(|error| err("send done", &error))?;
+    let _ = send.finish();
+    let raw = recv
+        .read_to_end(MAX_RESPONSE_BYTES)
+        .await
+        .map_err(|error| err("read done response", &error))?;
+    let response = Response::decode(&raw).map_err(|error| err("decode response", &error))?;
+    if response.status != Status::Ok {
+        return Err(JsValue::from_str(&format!(
+            "{}: {}",
+            response.status.label(),
+            response.message
+        )));
+    }
+    response
+        .message
+        .parse()
+        .map_err(|error| err("done response count", &error))
+}
+
 /// `[start, end)` byte ranges covering `total` in steps of `chunk`. Empty for
 /// an empty file.
 pub(crate) fn chunk_ranges(total: u64, chunk: u64) -> impl Iterator<Item = (u64, u64)> {

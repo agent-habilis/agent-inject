@@ -8,7 +8,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use agent_inject_proto::framing::{REQUEST_PREFIX_LEN, remaining_header_len};
+use agent_inject_proto::framing::{
+    OP_PREFIX_LEN, Op, REQUEST_PREFIX_LEN, decode_op, remaining_header_len,
+};
 use agent_inject_proto::{RequestHeader, Response, SECRET_LEN, Status, UPLOAD_ID_LEN, ct_eq};
 use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufWriter};
@@ -37,6 +39,8 @@ pub(crate) enum Outcome {
     Saved(PathBuf),
     AlreadySaved(PathBuf),
     Refused(Status),
+    /// The sender has nothing more to send; the session is over.
+    Done,
 }
 
 impl ReceiveCtx {
@@ -57,6 +61,11 @@ impl ReceiveCtx {
             .cloned()
     }
 
+    /// Files saved this session: each upload id is one saved file.
+    fn saved_count(&self) -> usize {
+        self.seen.lock().expect("seen map poisoned").len()
+    }
+
     fn remember(&self, upload_id: [u8; UPLOAD_ID_LEN], path: PathBuf) {
         self.seen
             .lock()
@@ -65,7 +74,8 @@ impl ReceiveCtx {
     }
 }
 
-/// Receive one upload from `recv` and answer on `send`.
+/// Receive one request from `recv` and answer on `send`: an upload, or the
+/// done signal that ends the session.
 ///
 /// # Errors
 /// The stream failed (reset, closed early mid-header, or a write error while
@@ -80,30 +90,46 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let outcome = match read_header(&mut recv).await? {
-        Err(status) => Err((status, "malformed header".to_owned())),
-        Ok(header) => handle(ctx, &header, &mut recv).await?,
+    let refuse = |status: Status, message: &str| {
+        (
+            Response {
+                status,
+                message: message.to_owned(),
+            },
+            Outcome::Refused(status),
+        )
     };
-    let (response, result) = match outcome {
-        Ok((path, fresh)) => {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let result = if fresh {
-                Outcome::Saved(path)
-            } else {
-                Outcome::AlreadySaved(path)
-            };
-            (
-                Response {
-                    status: Status::Ok,
-                    message: name,
-                },
-                result,
-            )
-        }
-        Err((status, message)) => (Response { status, message }, Outcome::Refused(status)),
+    let (response, result) = match read_request(&mut recv).await? {
+        Err(status) => refuse(status, "malformed request"),
+        Ok(Request::Done(secret)) if ct_eq(&secret, &ctx.secret) => (
+            Response {
+                status: Status::Ok,
+                message: ctx.saved_count().to_string(),
+            },
+            Outcome::Done,
+        ),
+        Ok(Request::Done(_)) => refuse(Status::Unauthorized, "wrong secret"),
+        Ok(Request::Upload(header)) => match handle(ctx, &header, &mut recv).await? {
+            Ok((path, fresh)) => {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let result = if fresh {
+                    Outcome::Saved(path)
+                } else {
+                    Outcome::AlreadySaved(path)
+                };
+                (
+                    Response {
+                        status: Status::Ok,
+                        message: name,
+                    },
+                    result,
+                )
+            }
+            Err((status, message)) => refuse(status, &message),
+        },
     };
     send.write_all(&response.encode())
         .await
@@ -162,14 +188,28 @@ fn truncated() -> (Status, String) {
     )
 }
 
-/// Read the whole header, or the status to refuse it with.
-async fn read_header<R: AsyncRead + Unpin>(
+enum Request {
+    Upload(RequestHeader),
+    Done([u8; SECRET_LEN]),
+}
+
+/// Read the whole request header, or the status to refuse it with.
+async fn read_request<R: AsyncRead + Unpin>(
     recv: &mut R,
-) -> Result<std::result::Result<RequestHeader, Status>> {
-    let mut header = vec![0u8; REQUEST_PREFIX_LEN];
+) -> Result<std::result::Result<Request, Status>> {
+    let mut header = vec![0u8; OP_PREFIX_LEN];
     recv.read_exact(&mut header)
         .await
         .context("read request prefix")?;
+    let secret = match decode_op(&header) {
+        Err(_) => return Ok(Err(Status::BadName)),
+        Ok((secret, Op::Done)) => return Ok(Ok(Request::Done(secret))),
+        Ok((secret, Op::Upload)) => secret,
+    };
+    header.resize(REQUEST_PREFIX_LEN, 0);
+    recv.read_exact(&mut header[OP_PREFIX_LEN..])
+        .await
+        .context("read upload prefix")?;
     let Ok(rest) = remaining_header_len(&header) else {
         return Ok(Err(Status::BadName));
     };
@@ -177,7 +217,10 @@ async fn read_header<R: AsyncRead + Unpin>(
     recv.read_exact(&mut header[REQUEST_PREFIX_LEN..])
         .await
         .context("read request header")?;
-    Ok(RequestHeader::decode(&header).map_err(|_| Status::BadName))
+    debug_assert_eq!(header[..SECRET_LEN], secret);
+    Ok(RequestHeader::decode(&header)
+        .map(Request::Upload)
+        .map_err(|_| Status::BadName))
 }
 
 enum BodyEnd {
@@ -219,6 +262,7 @@ async fn drain<R: AsyncRead + Unpin>(recv: &mut R, size: u64) -> Result<BodyEnd>
 mod tests {
     use std::path::Path;
 
+    use agent_inject_proto::framing::encode_done;
     use agent_inject_proto::{RequestHeader, Response, Status};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -335,6 +379,25 @@ mod tests {
         assert_eq!(retry.1.message, "a.txt");
         assert_eq!(other.0, Outcome::Saved(dir.path().join("a-2.txt")));
         assert_eq!(entries(dir.path()), ["a-2.txt", "a.txt"]);
+    }
+
+    #[tokio::test]
+    async fn done_with_the_right_secret_ends_the_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx(dir.path());
+        upload(&ctx, request("a.txt", 1, 1, b"x", SECRET)).await;
+        let (outcome, response) = upload(&ctx, encode_done(&SECRET)).await;
+        assert_eq!(outcome, Outcome::Done);
+        assert_eq!(response.status, Status::Ok);
+        assert_eq!(response.message, "1");
+    }
+
+    #[tokio::test]
+    async fn done_with_a_wrong_secret_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let (outcome, response) = upload(&ctx(dir.path()), encode_done(&[2u8; 32])).await;
+        assert_eq!(outcome, Outcome::Refused(Status::Unauthorized));
+        assert_eq!(response.status, Status::Unauthorized);
     }
 
     #[tokio::test]

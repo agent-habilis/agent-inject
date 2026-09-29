@@ -1,21 +1,25 @@
-//! The ALPNs and the byte layout of one upload.
+//! The ALPNs and the byte layout of one request.
 //!
-//! One upload is one QUIC bi-stream, opened by the browser:
+//! One request is one QUIC bi-stream, opened by the browser. It is an upload
+//! or the done signal that ends the session:
 //!
 //! ```text
-//! request:  secret(32) ‖ upload_id(16) ‖ name_len(u16 LE) ‖ name ‖ size(u64 LE) ‖ body(size) ‖ FIN
+//! upload:   secret(32) ‖ op=1 ‖ upload_id(16) ‖ name_len(u16 LE) ‖ name ‖ size(u64 LE) ‖ body(size) ‖ FIN
+//! done:     secret(32) ‖ op=2 ‖ FIN
 //! response: status(u8) ‖ len(u16 LE) ‖ message(UTF-8)
 //! ```
 //!
-//! On `Ok` the message is the basename the file was saved under, which can
-//! differ from the requested name after sanitizing or a collision suffix. On
-//! any other status it is the reason.
+//! On an upload's `Ok` the message is the basename the file was saved under,
+//! which can differ from the requested name after sanitizing or a collision
+//! suffix. On done's `Ok` it is how many files the session saved. On any other
+//! status it is the reason.
 //!
 //! `upload_id` is random per file on the client. A retry after a lost ack
 //! reuses it, so the receiver can answer with the name it already saved
 //! instead of writing a second copy.
 //!
-//! Sans-io: the receiver reads [`REQUEST_PREFIX_LEN`] bytes, asks
+//! Sans-io: the receiver reads [`OP_PREFIX_LEN`] bytes and calls
+//! [`decode_op`]. For an upload it reads on to [`REQUEST_PREFIX_LEN`], asks
 //! [`remaining_header_len`] how many more make up the header, reads those,
 //! then calls [`RequestHeader::decode`] on the whole header.
 
@@ -55,8 +59,49 @@ pub const MAX_NAME_BYTES: usize = 1024;
 /// Ceiling on a response message, for the same reason.
 pub const MAX_MESSAGE_BYTES: usize = 1024;
 
-/// `secret ‖ upload_id ‖ name_len`: the fixed part in front of the name.
-pub const REQUEST_PREFIX_LEN: usize = SECRET_LEN + UPLOAD_ID_LEN + 2;
+/// A request that uploads one file.
+pub const OP_UPLOAD: u8 = 1;
+
+/// A request that ends the session: the sender has nothing more to send.
+pub const OP_DONE: u8 = 2;
+
+/// `secret ‖ op`: what every request starts with.
+pub const OP_PREFIX_LEN: usize = SECRET_LEN + 1;
+
+/// `secret ‖ op ‖ upload_id ‖ name_len`: the fixed part in front of the name.
+pub const REQUEST_PREFIX_LEN: usize = OP_PREFIX_LEN + UPLOAD_ID_LEN + 2;
+
+/// What a request asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Op {
+    Upload,
+    Done,
+}
+
+/// Read the secret and the op off the first [`OP_PREFIX_LEN`] bytes.
+///
+/// # Errors
+/// Fewer bytes, or an op this build does not know.
+pub fn decode_op(prefix: &[u8]) -> Result<([u8; SECRET_LEN], Op)> {
+    let prefix = prefix.get(..OP_PREFIX_LEN).context("truncated request")?;
+    let mut secret = [0u8; SECRET_LEN];
+    secret.copy_from_slice(&prefix[..SECRET_LEN]);
+    let op = match prefix[SECRET_LEN] {
+        OP_UPLOAD => Op::Upload,
+        OP_DONE => Op::Done,
+        other => bail!("unknown request op: {other}"),
+    };
+    Ok((secret, op))
+}
+
+/// The whole done request.
+#[must_use]
+pub fn encode_done(secret: &[u8; SECRET_LEN]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(OP_PREFIX_LEN);
+    buf.extend_from_slice(secret);
+    buf.push(OP_DONE);
+    buf
+}
 
 /// Connection close code for a request that presents the wrong secret.
 pub const CLOSE_UNAUTHORIZED: u32 = 1;
@@ -79,6 +124,7 @@ impl RequestHeader {
         let name_len = checked_name_len(self.name.len())?;
         let mut buf = Vec::with_capacity(REQUEST_PREFIX_LEN + self.name.len() + 8);
         buf.extend_from_slice(&self.secret);
+        buf.push(OP_UPLOAD);
         buf.extend_from_slice(&self.upload_id);
         buf.extend_from_slice(&name_len.to_le_bytes());
         buf.extend_from_slice(self.name.as_bytes());
@@ -99,10 +145,12 @@ impl RequestHeader {
         if bytes.len() != REQUEST_PREFIX_LEN + name_len + 8 {
             bail!("request header length mismatch");
         }
-        let mut secret = [0u8; SECRET_LEN];
-        secret.copy_from_slice(&bytes[..SECRET_LEN]);
+        let (secret, op) = decode_op(prefix)?;
+        if op != Op::Upload {
+            bail!("not an upload request");
+        }
         let mut upload_id = [0u8; UPLOAD_ID_LEN];
-        upload_id.copy_from_slice(&bytes[SECRET_LEN..SECRET_LEN + UPLOAD_ID_LEN]);
+        upload_id.copy_from_slice(&bytes[OP_PREFIX_LEN..OP_PREFIX_LEN + UPLOAD_ID_LEN]);
         let name_end = REQUEST_PREFIX_LEN + name_len;
         let name = std::str::from_utf8(&bytes[REQUEST_PREFIX_LEN..name_end])
             .context("file name is not UTF-8")?
@@ -124,7 +172,7 @@ impl RequestHeader {
 /// The prefix is short, or declares a name over [`MAX_NAME_BYTES`].
 pub fn remaining_header_len(prefix: &[u8]) -> Result<usize> {
     let len_bytes = prefix
-        .get(SECRET_LEN + UPLOAD_ID_LEN..REQUEST_PREFIX_LEN)
+        .get(OP_PREFIX_LEN + UPLOAD_ID_LEN..REQUEST_PREFIX_LEN)
         .context("truncated request prefix")?;
     let name_len = usize::from(u16::from_le_bytes([len_bytes[0], len_bytes[1]]));
     if name_len > MAX_NAME_BYTES {
@@ -244,8 +292,9 @@ impl Response {
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_MESSAGE_BYTES, MAX_NAME_BYTES, REQUEST_PREFIX_LEN, RequestHeader, Response, Status,
-        UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN, remaining_header_len,
+        MAX_MESSAGE_BYTES, MAX_NAME_BYTES, OP_DONE, OP_PREFIX_LEN, OP_UPLOAD, Op,
+        REQUEST_PREFIX_LEN, RequestHeader, Response, Status, UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN,
+        decode_op, encode_done, remaining_header_len,
     };
 
     fn header(name: &str) -> RequestHeader {
@@ -261,13 +310,16 @@ mod tests {
     fn wire_constants_are_pinned() {
         assert_eq!(UPLOAD_ALPN, b"agent-inject/upload/1");
         assert_eq!(WEBRTC_SIGNAL_ALPN, b"agent-inject/webrtc-signal/1");
-        assert_eq!(REQUEST_PREFIX_LEN, 50);
+        assert_eq!(REQUEST_PREFIX_LEN, 51);
+        assert_eq!(OP_PREFIX_LEN, 33);
+        assert_eq!((OP_UPLOAD, OP_DONE), (1, 2));
     }
 
     #[test]
     fn header_bytes_are_pinned() {
         let bytes = header("a.jpg").encode().unwrap();
         let mut expected = vec![7u8; 32];
+        expected.push(1);
         expected.extend([9u8; 16]);
         expected.extend([5, 0]);
         expected.extend(b"a.jpg");
@@ -301,7 +353,7 @@ mod tests {
 
         let mut prefix = vec![0u8; REQUEST_PREFIX_LEN];
         let len = u16::try_from(MAX_NAME_BYTES + 1).unwrap().to_le_bytes();
-        prefix[48..50].copy_from_slice(&len);
+        prefix[49..51].copy_from_slice(&len);
         assert!(remaining_header_len(&prefix).is_err());
     }
 
@@ -314,6 +366,32 @@ mod tests {
         let mut short = header("ab").encode().unwrap();
         short.pop();
         assert!(RequestHeader::decode(&short).is_err());
+    }
+
+    #[test]
+    fn done_bytes_are_pinned_and_decode() {
+        let bytes = encode_done(&[7u8; 32]);
+        let mut expected = vec![7u8; 32];
+        expected.push(2);
+        assert_eq!(bytes, expected);
+        assert_eq!(decode_op(&bytes).unwrap(), ([7u8; 32], Op::Done));
+    }
+
+    #[test]
+    fn upload_prefix_decodes_as_an_upload() {
+        let bytes = header("a").encode().unwrap();
+        assert_eq!(
+            decode_op(&bytes[..OP_PREFIX_LEN]).unwrap(),
+            ([7u8; 32], Op::Upload)
+        );
+    }
+
+    #[test]
+    fn unknown_op_and_short_prefix_are_rejected() {
+        let mut bytes = encode_done(&[7u8; 32]);
+        bytes[32] = 9;
+        assert!(decode_op(&bytes).is_err());
+        assert!(decode_op(&bytes[..10]).is_err());
     }
 
     #[test]
