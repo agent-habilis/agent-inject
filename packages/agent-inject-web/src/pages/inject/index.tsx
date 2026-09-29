@@ -1,0 +1,196 @@
+/**
+ * The page a phone opens from the link agent-inject printed: connect to that
+ * one session, then send it photos and files.
+ *
+ * Files can be added before the connection is up; the queue holds them. When
+ * the connection drops, the page redials with backoff and puts anything that
+ * failed back in line.
+ */
+
+import { Box, Button, Stack, Text } from 'moonspace-dom'
+import { component, signal } from 'visage-dom'
+import { useParams } from 'visage-router'
+
+import { AddButtons } from '../../components/add-buttons/index.tsx'
+import { CameraSheet } from '../../components/camera/index.tsx'
+import { FailedBody } from '../../components/failed-body/index.tsx'
+import { UploadList } from '../../components/upload-list/index.tsx'
+import { type Connection, connect, reconnectDelayMs } from '../../lib/client/index.ts'
+import { looksLikeTicket } from '../../lib/ticket/index.ts'
+import { type Item, UploadQueue } from '../../lib/upload-queue/index.ts'
+
+/** Dials in a row that may fail before the page gives up and asks. */
+const MAX_FAILED_DIALS = 4
+
+type Phase =
+  | { kind: 'connecting' }
+  | { kind: 'connected' }
+  | { kind: 'reconnecting'; reason: string }
+  | { kind: 'failed'; reason: string }
+
+export interface InjectSessionProps {
+  ticket: string
+  connect: (ticket: string) => Promise<Connection>
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      { once: true },
+    )
+  })
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export const InjectSession = component(function* (props: InjectSessionProps) {
+  const ctx = this
+  const ticket = props.ticket
+  const dial = props.connect
+  const phase = signal<Phase>(
+    looksLikeTicket(ticket)
+      ? { kind: 'connecting' }
+      : { kind: 'failed', reason: 'This is not an agent-inject link.' },
+  )
+  const items = signal<readonly Item[]>([])
+  const cameraOpen = signal(false)
+  const queue = new UploadQueue({
+    concurrency: 2,
+    onChange: (next) => {
+      items.value = next
+    },
+  })
+  let connection: Connection | null = null
+
+  async function run(): Promise<void> {
+    let failures = 0
+    while (!ctx.aborted.aborted) {
+      let opened: Connection
+      try {
+        opened = await dial(ticket)
+      } catch (error) {
+        if (ctx.aborted.aborted) return
+        failures += 1
+        if (failures >= MAX_FAILED_DIALS) {
+          phase.value = { kind: 'failed', reason: message(error) }
+          return
+        }
+        phase.value = { kind: 'reconnecting', reason: message(error) }
+        await sleep(reconnectDelayMs(failures - 1), ctx.aborted)
+        continue
+      }
+      if (ctx.aborted.aborted) {
+        void opened.close()
+        return
+      }
+      failures = 0
+      connection = opened
+      phase.value = { kind: 'connected' }
+      queue.retryFailed()
+      queue.setUploader(opened)
+      const reason = await opened.closed()
+      queue.setUploader(null)
+      connection = null
+      if (ctx.aborted.aborted) return
+      phase.value = { kind: 'reconnecting', reason }
+    }
+  }
+
+  function start(): void {
+    phase.value = { kind: 'connecting' }
+    void run()
+  }
+
+  if (phase.peek().kind === 'connecting') void run()
+  ctx.aborted.addEventListener('abort', () => {
+    void connection?.close()
+  })
+
+  function add(files: readonly File[]): void {
+    queue.add(files.map((file) => ({ name: file.name, blob: file })))
+  }
+
+  function statusLine() {
+    const current = phase.value
+    switch (current.kind) {
+      case 'connecting':
+        return <Text color="fgMuted">connecting…</Text>
+      case 'connected':
+        return <Text color="success">connected</Text>
+      case 'reconnecting':
+        return (
+          <Text color="warning" class="selectable">
+            reconnecting — {current.reason}
+          </Text>
+        )
+      case 'failed':
+        return null
+    }
+  }
+
+  yield () => {
+    const current = phase.value
+    if (current.kind === 'failed' && items.value.length === 0) {
+      return (
+        <Stack direction="column" gap={1} data-testid="inject-failed">
+          <FailedBody title="Could not reach agent-inject" reason={current.reason} />
+          {looksLikeTicket(ticket) ? (
+            <Button variant="secondary" onclick={() => start()}>
+              Try again
+            </Button>
+          ) : null}
+        </Stack>
+      )
+    }
+    return (
+      <div style={{ padding: '1em 2ch', maxWidth: '72ch', margin: '0 auto' }}>
+        <Stack direction="column" gap={1} data-testid="inject-page">
+          <Stack direction="row" gap={1}>
+            <Text weight="bold">agent-inject</Text>
+            {statusLine()}
+            {current.kind === 'failed' ? (
+              <Button variant="ghost" onclick={() => start()}>
+                Reconnect
+              </Button>
+            ) : null}
+          </Stack>
+          {cameraOpen.value ? (
+            <Box border="line" padX={1} padY={1}>
+              <CameraSheet
+                onShot={(file: File) => add([file])}
+                onClose={() => {
+                  cameraOpen.value = false
+                }}
+              />
+            </Box>
+          ) : (
+            <AddButtons
+              onFiles={add}
+              onCamera={() => {
+                cameraOpen.value = true
+              }}
+            />
+          )}
+          <UploadList items={items.value} onRetry={(id) => queue.retry(id)} />
+        </Stack>
+      </div>
+    )
+  }
+})
+
+/** The route: the ticket from the URL, re-keyed so a new ticket is a new session. */
+export const InjectPage = component(function* () {
+  const params = useParams(this)
+  yield () => {
+    const ticket = params.value['ticket'] ?? ''
+    return <InjectSession key={ticket} ticket={ticket} connect={connect} />
+  }
+})

@@ -1,0 +1,49 @@
+# Standalone workspace: this is a wasm32-only cdylib, so a `--workspace` build
+# of the root would fail on it. Path deps still cross the boundary, so it links
+# the very same `agent-inject-proto` the CLI does.
+[package]
+name = "agent-inject-wasm-client"
+version = "0.1.0"
+edition = "2024"
+description = "Browser client for agent-inject: uploads over a WebRTC data channel"
+license = "MIT"
+repository = "https://github.com/agent-habilis/agent-inject"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+agent-inject-proto = { path = "../agent-inject-proto" }
+# Portable half only: `host` pulls in signals, sockets and the filesystem,
+# none of which exist in a tab. The rev must stay in step with the root
+# workspace's.
+fofoca = { git = "https://github.com/fofoca-network/fofoca", rev = "d9434eec9acf81542acea56bba8e86439c8cb8ee", default-features = false }
+fofoca-iroh-webrtc-transport = { git = "https://github.com/fofoca-network/fofoca", rev = "d9434eec9acf81542acea56bba8e86439c8cb8ee", features = ["web"] }
+# NOTE: no iroh entries -- taken from `fofoca::iroh`.
+anyhow = "1"
+serde_json = "1"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+futures = "0.3"
+web-sys = { version = "0.3", features = ["Blob"] }
+# Both generations that reach wasm need their browser backend switched on.
+# 0.3+ additionally needs the `getrandom_backend` rustflag in
+# `.cargo/config.toml`; the feature alone is not enough.
+getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
+getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+# The unit tests run on wasm32, the only target this crate builds for: off
+# wasm32, `fofoca` turns on the transport's `native` backend and
+# `WebRtcHandle` stops being the browser one.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true

@@ -1,0 +1,13 @@
+{
+  "name": "agent-inject-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Rust client, compiled to wasm. Loaded once per document.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

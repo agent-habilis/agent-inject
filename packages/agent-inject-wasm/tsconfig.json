@@ -1,0 +1,10 @@
+// Both of this program's inputs under `src/` are generated, from two different
+// places: `path.ts` by `scripts/wasm-asset.ts` (which the root `typecheck`
+// script runs first, via `gen-wasm-path.ts`), and `glue/` by wasm-bindgen
+// through `scripts/build-wasm.ts`. Only the first is automatic, so a clean
+// checkout has to run `cargo task web-wasm` before this resolves.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": [], "exactOptionalPropertyTypes": false },
+  "include": ["src"]
+}

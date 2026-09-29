@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>agent-inject</title>
+    <!-- First-paint guard: pick light or dark before any JavaScript runs. -->
+    <style>
+      html {
+        color-scheme: light dark;
+        background: light-dark(#ffffff, #272727);
+        color: light-dark(#272727, #ffffff);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="../main.tsx"></script>
+  </body>
+</html>

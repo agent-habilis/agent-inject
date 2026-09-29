@@ -1,0 +1,18 @@
+html body {
+  background: var(--bg);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+#root {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Opt-in text selection, for text that is the payload: an error to report. */
+.selectable,
+.selectable * {
+  -webkit-user-select: text;
+  user-select: text;
+}

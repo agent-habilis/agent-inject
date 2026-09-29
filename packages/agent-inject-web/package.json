@@ -1,0 +1,19 @@
+{
+  "name": "agent-inject-web",
+  "version": "0.0.0",
+  "description": "The phone half: pick photos and files, stream them to agent-inject.",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "agent-inject-wasm": "workspace:*",
+    "moonspace": "workspace:*",
+    "moonspace-dom": "workspace:*",
+    "visage-dom": "workspace:*",
+    "visage-router": "workspace:*",
+    "visage-style": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  }
+}

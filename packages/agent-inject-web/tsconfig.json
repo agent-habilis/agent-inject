@@ -1,0 +1,8 @@
+// `../../types` carries the ambient `declare module '*.css'` that lets
+// `main.tsx` import `app.css`.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": [], "exactOptionalPropertyTypes": false },
+  "include": ["src", "../../types"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}
