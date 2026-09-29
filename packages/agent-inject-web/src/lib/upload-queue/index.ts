@@ -40,6 +40,11 @@ export interface QueueOptions {
   newUploadId?: () => Uint8Array
 }
 
+/** Nothing queued or uploading. Failed files do not hold it up. */
+export function isIdle(items: readonly Item[]): boolean {
+  return items.every((item) => item.status === 'saved' || item.status === 'failed')
+}
+
 function randomUploadId(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(16))
 }
@@ -57,6 +62,10 @@ export class UploadQueue {
 
   get items(): readonly Item[] {
     return this.#items
+  }
+
+  get idle(): boolean {
+    return isIdle(this.#items)
   }
 
   add(files: readonly { name: string; blob: Blob }[]): void {

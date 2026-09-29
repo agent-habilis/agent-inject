@@ -12,6 +12,7 @@ import { component, signal } from 'visage-dom'
 import { useParams } from 'visage-router'
 
 import { AddButtons } from '../../components/add-buttons/index.tsx'
+import { Centered } from '../../components/centered/index.tsx'
 import { CameraSheet } from '../../components/camera/index.tsx'
 import { FailedBody } from '../../components/failed-body/index.tsx'
 import { UploadList } from '../../components/upload-list/index.tsx'
@@ -22,7 +23,7 @@ import {
   reconnectDelayMs,
 } from '../../lib/client/index.ts'
 import { looksLikeTicket } from '../../lib/ticket/index.ts'
-import { type Item, UploadQueue } from '../../lib/upload-queue/index.ts'
+import { type Item, UploadQueue, isIdle } from '../../lib/upload-queue/index.ts'
 
 /** Dials in a row that may fail before the page gives up and asks. */
 const MAX_FAILED_DIALS = 4
@@ -32,6 +33,8 @@ type Phase =
   | { kind: 'connected'; dataPath: string }
   | { kind: 'reconnecting'; reason: string }
   | { kind: 'failed'; reason: string }
+  | { kind: 'finishing' }
+  | { kind: 'finished'; count: number }
 
 export interface InjectSessionProps {
   ticket: string
@@ -104,8 +107,25 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
       const reason = await opened.closed()
       queue.setUploader(null)
       connection = null
-      if (ctx.aborted.aborted) return
+      // After Done the receiver closes the connection on purpose.
+      if (ctx.aborted.aborted || isOver()) return
       phase.value = { kind: 'reconnecting', reason }
+    }
+  }
+
+  function isOver(): boolean {
+    const kind = phase.peek().kind
+    return kind === 'finishing' || kind === 'finished'
+  }
+
+  async function finish(): Promise<void> {
+    const current = connection
+    if (!current) return
+    phase.value = { kind: 'finishing' }
+    try {
+      phase.value = { kind: 'finished', count: await current.finish() }
+    } catch (error) {
+      phase.value = { kind: 'failed', reason: message(error) }
     }
   }
 
@@ -136,13 +156,28 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
             reconnecting — {current.reason}
           </Text>
         )
+      case 'finishing':
+        return <Text color="fgMuted">finishing…</Text>
       case 'failed':
+      case 'finished':
         return null
     }
   }
 
   yield () => {
     const current = phase.value
+    if (current.kind === 'finished') {
+      return (
+        <Centered>
+          <Stack direction="column" gap={1} data-testid="inject-finished">
+            <Text weight="bold" color="success">
+              Finished — {current.count === 1 ? '1 file' : `${current.count} files`} sent.
+            </Text>
+            <Text color="fgMuted">You can close this page.</Text>
+          </Stack>
+        </Centered>
+      )
+    }
     if (current.kind === 'failed' && items.value.length === 0) {
       return (
         <Stack direction="column" gap={1} data-testid="inject-failed">
@@ -184,6 +219,14 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
               }}
             />
           )}
+          <Button
+            variant="secondary"
+            data-testid="done"
+            disabled={current.kind !== 'connected' || !isIdle(items.value)}
+            onclick={() => void finish()}
+          >
+            Done
+          </Button>
           <UploadList items={items.value} onRetry={(id) => queue.retry(id)} />
         </Stack>
       </div>

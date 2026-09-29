@@ -10,6 +10,8 @@ import type { Uploader } from '../upload-queue/index.ts'
 export interface Connection extends Uploader {
   /** `webrtc` or `relay`: the path the uploads ride. */
   readonly dataPath: string
+  /** Tell the receiver the sender is finished. Resolves with how many files it saved. */
+  finish(): Promise<number>
   /** Resolves with the reason when the connection ends. */
   closed(): Promise<string>
   close(): Promise<void>
@@ -104,6 +106,7 @@ export async function connect(ticket: string): Promise<Connection> {
   return {
     dataPath: client.dataPath(),
     upload: (name, blob, uploadId, onProgress) => client.upload(name, blob, uploadId, onProgress),
+    finish: () => client.finish(),
     closed: () => client.closed(),
     close: () => client.close(),
   }

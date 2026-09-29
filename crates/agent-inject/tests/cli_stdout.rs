@@ -1,13 +1,13 @@
-//! The binary's output contract: stdout carries the URL and one line per
-//! saved file, stderr stays empty unless something fails, and ctrl-c exits
-//! cleanly.
+//! The binary's output contract: stdout carries the URL, one line per saved
+//! file, then a done line when the sender finishes; the process then exits 0
+//! on its own, and stderr stays empty unless something fails.
 
 #![cfg(unix)]
 
 use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
 
-use agent_inject::test_support::{loopback_sender, upload};
+use agent_inject::test_support::{finish, loopback_sender, upload};
 use agent_inject_proto::{InjectTicket, RequestHeader, Status, UPLOAD_ALPN};
 
 fn line(reader: &mut impl BufRead) -> serde_json::Value {
@@ -17,7 +17,7 @@ fn line(reader: &mut impl BufRead) -> serde_json::Value {
 }
 
 #[tokio::test]
-async fn json_stdout_is_the_url_then_one_path_per_file() {
+async fn json_stdout_is_the_url_one_path_per_file_then_done() {
     let dir = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_agent-inject"))
         .args(["--loopback", "--output", "json"])
@@ -54,13 +54,40 @@ async fn json_stdout_is_the_url_then_one_path_per_file() {
         assert!(std::path::Path::new(&path).is_absolute());
     }
 
-    let status = Command::new("kill")
-        .args(["-INT", &child.id().to_string()])
-        .status()
-        .unwrap();
-    assert!(status.success());
-    let exit = child.wait().unwrap();
+    // The sender's done signal, not ctrl-c, ends the process. Wait for the
+    // exit first, so a binary that ignores the signal fails here instead of
+    // hanging on a stdout line that never comes.
+    assert_eq!(
+        finish(&conn, &ticket.secret).await.unwrap().status,
+        Status::Ok
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let exit = loop {
+        if let Some(exit) = child.try_wait().unwrap() {
+            break exit;
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let mut rest = String::new();
+            let _ = stdout.read_to_string(&mut rest);
+            panic!("agent-inject did not exit after the done signal; stdout after it: {rest:?}");
+        }
+        // Async, so this test's own endpoint keeps running and can
+        // acknowledge the answer to the done signal.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    };
     assert!(exit.success(), "{exit:?}");
+
+    let done = line(&mut stdout);
+    let files: Vec<&str> = done["done"]["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|file| file.as_str().unwrap())
+        .collect();
+    assert_eq!(files.len(), 2);
+    assert!(files[0].ends_with("inbox/one.txt") && files[1].ends_with("inbox/two.txt"));
+    assert!(done["done"]["dir"].as_str().unwrap().ends_with("inbox"));
 
     let mut rest = String::new();
     stdout.read_to_string(&mut rest).unwrap();

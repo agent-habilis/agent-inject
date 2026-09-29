@@ -21,7 +21,9 @@ agent-inject <dir>
      take it.
    - **Add file** — pick any file.
 4. Each saved file prints as one absolute path on stdout.
-5. Press ctrl-c to stop.
+5. When the phone has sent everything, press **Done** on the page. The
+   command prints a last line and stops. Press ctrl-c to stop from the
+   computer instead.
 
 If a file with the same name exists, the new file gets a suffix (`a-2.jpg`).
 agent-inject never overwrites a file.
@@ -32,7 +34,13 @@ stdout carries the link, the QR code, and one line per saved file. stderr
 carries errors only.
 
 For a script or an agent, use `--output json`. Then stdout has one JSON object
-per line: `{"url": …}` first, then `{"path": …}` for each file.
+per line: `{"url": …}` first, then `{"path": …}` for each file. When the phone
+presses Done, the last line is `{"done": {"dir": …, "files": [ … ]}}`, with
+every file of the session, and the command exits 0. After ctrl-c there is no
+`done` line, so a caller can tell a finished session from a stopped one.
+
+Done is available only when no file is still uploading. A file that failed
+stays out of the result.
 
 | Flag | Effect |
 |---|---|

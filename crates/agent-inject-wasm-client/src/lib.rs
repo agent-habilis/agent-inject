@@ -121,6 +121,15 @@ impl InjectClient {
         .await
     }
 
+    /// Tell the receiver the sender is finished; the receiver then ends the
+    /// session. Resolves with how many files it saved.
+    ///
+    /// # Errors
+    /// The stream fails, or the receiver refuses.
+    pub async fn finish(&self) -> Result<u32, JsValue> {
+        upload::send_done(&self.connection, &self.secret).await
+    }
+
     /// Resolves when the connection ends, with the reason. The page reconnects
     /// from here.
     pub async fn closed(&self) -> String {

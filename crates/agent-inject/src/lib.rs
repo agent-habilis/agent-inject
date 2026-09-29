@@ -44,6 +44,21 @@ pub mod test_support {
         crate::endpoint::build_endpoint(&LookupOpts::loopback(), key, None).await
     }
 
+    /// Send the done signal on `conn` the way the browser does, and read the
+    /// answer.
+    ///
+    /// # Errors
+    /// The stream fails before a response arrives.
+    pub async fn finish(conn: &Connection, secret: &[u8; 32]) -> Result<Response> {
+        let (mut send, mut recv) = conn.open_bi().await.context("open done stream")?;
+        send.write_all(&agent_inject_proto::framing::encode_done(secret))
+            .await
+            .context("send done")?;
+        let _ = send.finish();
+        let raw = recv.read_to_end(4096).await.context("read response")?;
+        Response::decode(&raw)
+    }
+
     /// Send one upload on `conn` the way the browser does, and read the
     /// answer.
     ///

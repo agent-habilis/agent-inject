@@ -10,6 +10,7 @@ use anyhow::{Context, Result, bail};
 use fofoca::iroh::protocol::Router;
 use fofoca::iroh::{EndpointAddr, SecretKey};
 use fofoca_iroh_webrtc_transport::{IceConfig, WebRtcHandle, WebRtcTransport};
+use tokio::sync::Notify;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
 use crate::endpoint::{build_endpoint, wait_online};
@@ -31,12 +32,25 @@ pub struct ServeOpts {
 #[derive(Debug)]
 pub struct Session {
     pub ticket: InjectTicket,
+    /// The directory the files are written into, resolved.
+    pub dir: PathBuf,
     /// Every saved file, as an absolute path, in the order it finished.
     pub saved: UnboundedReceiver<PathBuf>,
+    done: Arc<Notify>,
     router: Router,
 }
 
 impl Session {
+    /// Resolves when the sender says it has nothing more to send. Every file
+    /// it sent before that is already in `saved`.
+    ///
+    /// The future owns its handle, so it can be awaited while `saved` is
+    /// borrowed mutably, as in a `select!`.
+    pub fn finished(&self) -> impl Future<Output = ()> + Send + use<> {
+        let done = Arc::clone(&self.done);
+        async move { done.notified().await }
+    }
+
     /// Stop accepting, then close the endpoint. In-flight uploads are dropped
     /// and their `.part` files removed.
     pub async fn shutdown(self) {
@@ -81,10 +95,11 @@ pub async fn serve_with(opts: ServeOpts) -> Result<Session> {
         .dir
         .canonicalize()
         .with_context(|| format!("resolve {}", opts.dir.display()))?;
-    let ctx = Arc::new(ReceiveCtx::new(dir, secret, None));
+    let ctx = Arc::new(ReceiveCtx::new(dir.clone(), secret, None));
     let (tx, saved) = unbounded_channel();
+    let done = Arc::new(Notify::new());
     let router = Router::builder(endpoint.clone())
-        .accept(UPLOAD_ALPN, UploadHandler::new(ctx, tx))
+        .accept(UPLOAD_ALPN, UploadHandler::new(ctx, tx, Arc::clone(&done)))
         .accept(
             WEBRTC_SIGNAL_ALPN,
             SignalHandler::new(endpoint.id(), webrtc, opts.ice),
@@ -92,7 +107,9 @@ pub async fn serve_with(opts: ServeOpts) -> Result<Session> {
         .spawn();
     Ok(Session {
         ticket,
+        dir,
         saved,
+        done,
         router,
     })
 }

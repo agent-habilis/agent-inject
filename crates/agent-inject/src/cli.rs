@@ -59,12 +59,26 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
     let url = web_url(&session.ticket.encode());
     announce(&cli, &url);
 
+    let mut files = Vec::new();
+    let finished = session.finished();
+    tokio::pin!(finished);
     loop {
         tokio::select! {
             saved = session.saved.recv() => {
                 let Some(path) = saved else { break };
                 print_saved(cli.output, &path);
+                files.push(path);
             }
+            () = &mut finished => {
+                // Every file the sender sent before done is already queued.
+                while let Ok(path) = session.saved.try_recv() {
+                    print_saved(cli.output, &path);
+                    files.push(path);
+                }
+                print_done(cli.output, &session.dir, &files);
+                break;
+            }
+            // No done line: a caller can tell "finished" from "stopped".
             _ = tokio::signal::ctrl_c() => break,
         }
     }
@@ -83,7 +97,10 @@ fn announce(cli: &Cli, url: &str) {
             }
             status_out("Open", url);
             status_out("Saving", &format!("to {}", home_path(&cli.dir)));
-            status_out("Waiting", "for files; press ctrl-c to stop");
+            status_out(
+                "Waiting",
+                "for files; press Done on the phone, or ctrl-c to stop",
+            );
         }
     }
     let _ = std::io::stdout().flush();
@@ -93,6 +110,23 @@ fn print_saved(output: OutputFormat, path: &std::path::Path) {
     match output {
         OutputFormat::Json => println!("{}", serde_json::json!({ "path": path })),
         OutputFormat::Human => println!("{}", path.display()),
+    }
+    let _ = std::io::stdout().flush();
+}
+
+fn print_done(output: OutputFormat, dir: &std::path::Path, files: &[PathBuf]) {
+    match output {
+        OutputFormat::Json => println!(
+            "{}",
+            serde_json::json!({ "done": { "dir": dir, "files": files } })
+        ),
+        OutputFormat::Human => {
+            let count = match files.len() {
+                1 => "1 file".to_owned(),
+                count => format!("{count} files"),
+            };
+            status_out("Done", &format!("{count} in {}", home_path(dir)));
+        }
     }
     let _ = std::io::stdout().flush();
 }
