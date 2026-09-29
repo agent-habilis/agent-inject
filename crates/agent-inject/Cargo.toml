@@ -1,0 +1,33 @@
+[package]
+name = "agent-inject"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Caio Gondim <me@caiogondim.com>"]
+description = "receive photos and files from a phone into a directory, peer to peer over iroh"
+license = "MIT"
+repository = "https://github.com/agent-habilis/agent-inject"
+readme = "README.md"
+keywords = ["agents", "p2p", "upload", "iroh"]
+categories = ["network-programming", "command-line-utilities"]
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+name = "agent_inject"
+path = "src/lib.rs"
+
+[[bin]]
+name = "agent-inject"
+path = "src/main.rs"
+
+[dependencies]
+agent-inject-proto = { path = "../agent-inject-proto" }
+tokio.workspace = true
+anyhow.workspace = true
+anstyle.workspace = true
+anstream.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

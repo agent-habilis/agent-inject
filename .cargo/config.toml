@@ -1,0 +1,30 @@
+[alias]
+task = "run --package tasks --"
+
+# `getrandom` refuses to build for wasm32-unknown-unknown unless it is told
+# which entropy source to use, because the target has no OS to ask. Enabling
+# the crate's `wasm_js` *feature* alone is not enough — it also gates on this
+# cfg, so a build that sets only the feature fails with the same message.
+#
+# Three generations of `getrandom` are in this graph at once (0.2, 0.3, 0.4),
+# pulled by different layers of the iroh stack. Only 0.3+ reads this flag; 0.2
+# is switched by its `js` feature where it is depended on directly.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", 'getrandom_backend="wasm_js"']
+# `cargo test --target wasm32-unknown-unknown` runs the harness through
+# wasm-bindgen's runner (node by default). Nothing else targets wasm32 with
+# `cargo test`, so this only affects the wasm test suite.
+#
+# That suite exists because `cargo check` cannot see a *runtime* failure, and
+# this crate's wasm breakages are all runtime: `Instant::now` panics on
+# wasm32-unknown-unknown, `tokio::time` has no driver, and `tokio::spawn` has no
+# reactor. Each one compiled cleanly and then panicked in a browser.
+runner = "wasm-bindgen-test-runner"
+
+# NOTE: to test in-progress fofoca work from the sibling checkout before a
+# rev bump, append a LOCAL TESTING [patch."https://github.com/fofoca-network/fofoca"]
+# table here (config-level patches reach both workspaces; manifest patches do
+# not cross the nested wasm-client boundary). The pre-commit hook in
+# .git/hooks rejects committing such a section or a lockfile resolved
+# against it. Unwind: push fofoca, bump the manifest revs, delete the
+# section, rebuild, commit.

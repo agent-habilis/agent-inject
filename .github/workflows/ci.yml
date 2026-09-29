@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # Reads rust-toolchain.toml — do not duplicate the version here.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      # `cargo task ci` formats with this exact nightly (tasks/src/fmt.rs).
+      - name: Install nightly rustfmt
+        run: rustup toolchain install nightly-2026-06-05 --profile minimal --component rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            crates/agent-inject-wasm-client
+
+      # The CLI must match the `wasm-bindgen` crate the client links against,
+      # or the generated glue refuses to load.
+      - name: Install wasm-bindgen-cli
+        if: hashFiles('crates/agent-inject-wasm-client/Cargo.lock') != ''
+        run: |
+          version=$(grep -A1 '^name = "wasm-bindgen"$' crates/agent-inject-wasm-client/Cargo.lock | sed -nE 's/^version = "(.*)"/\1/p')
+          echo "wasm-bindgen resolved to $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install frontend dependencies
+        if: hashFiles('package.json') != ''
+        run: bun install --frozen-lockfile
+
+      - name: Build wasm
+        if: hashFiles('crates/agent-inject-wasm-client/Cargo.toml') != ''
+        run: cargo task web-wasm
+
+      - name: Gate
+        run: cargo task ci

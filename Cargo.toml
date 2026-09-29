@@ -1,0 +1,71 @@
+[workspace]
+members = ["crates/*", "tasks"]
+# Load-bearing on a *virtual* manifest: a virtual workspace inherits no edition
+# from its members and silently defaults to the edition-2015 `resolver = "1"`.
+resolver = "3"
+default-members = ["crates/agent-inject"]
+# wasm32-only cdylib (`web_sys::window()` does not exist off wasm32), so a
+# `--workspace` build would fail on it. It keeps its own `[workspace]`.
+exclude = ["crates/agent-inject-wasm-client"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.93"
+
+[workspace.dependencies]
+# Pinned by rev to the same fofoca as agent-share, so both tools build against
+# one engine. Bump in lockstep with agent-share.
+fofoca = { git = "https://github.com/fofoca-network/fofoca", rev = "d9434eec9acf81542acea56bba8e86439c8cb8ee", default-features = false }
+fofoca-protocol = { git = "https://github.com/fofoca-network/fofoca", rev = "d9434eec9acf81542acea56bba8e86439c8cb8ee", default-features = false }
+fofoca-iroh-webrtc-transport = { git = "https://github.com/fofoca-network/fofoca", rev = "d9434eec9acf81542acea56bba8e86439c8cb8ee" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "fs", "signal", "net", "process"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+anstyle = "1"
+anstream = "0.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "tracing-log"] }
+# NOTE: no `iroh` entry. The iroh family is reached through `fofoca::iroh` /
+# `fofoca_protocol::iroh_base`, and fofoca owns which fork that is. Declaring
+# iroh here would put two `iroh` crates in one graph.
+bs58 = "0.5"
+sha2 = "0.10"
+rand = "0.9"
+
+[workspace.lints.rust]
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "deny"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+missing_debug_implementations = "warn"
+non_ascii_idents = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+await_holding_lock = "deny"
+cargo = { level = "warn", priority = -1 }
+min_ident_chars = "warn"
+shadow_unrelated = "warn"
+semicolon_inside_block = "warn"
+allow_attributes_without_reason = "warn"
+allow_attributes = "warn"
+wildcard_enum_match_arm = "warn"
+module_name_repetitions = "allow"
+multiple_crate_versions = "allow"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.release.build-override]
+opt-level = 3
+
+[profile.ci]
+inherits = "release"
+lto = "thin"
+codegen-units = 16

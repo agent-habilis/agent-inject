@@ -1,0 +1,22 @@
+[package]
+name = "agent-inject-proto"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Caio Gondim <me@caiogondim.com>"]
+description = "wire format for agent-inject: the ticket codec and the upload framing"
+license = "MIT"
+repository = "https://github.com/agent-habilis/agent-inject"
+readme = "README.md"
+keywords = ["p2p", "wire-format", "iroh", "upload"]
+categories = ["network-programming", "encoding", "wasm"]
+publish = false
+
+[lints]
+workspace = true
+
+# Every dependency here must build for `wasm32-unknown-unknown`: the CLI and
+# the browser client both link this crate, and it is the only thing that makes
+# them agree on the bytes. CI checks it with
+# `cargo check --target wasm32-unknown-unknown -p agent-inject-proto`.
+[dependencies]
