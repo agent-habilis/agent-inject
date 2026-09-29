@@ -90,6 +90,23 @@ The files go over WebRTC.
 If port 8443 is already served, the command stops and changes nothing. Look at
 `tailscale serve status`.
 
+### Transports and lookups
+
+The files go over a WebRTC data channel. If WebRTC cannot connect, they go
+over the relay. The page shows which one it uses: `connected (webrtc)` or
+`connected (relay)`. The page finds the receiver through the relay that the
+link names.
+
+To test one path, add a query to the link:
+
+| Query | Effect |
+|---|---|
+| `?transport=webrtc,relay` | The paths that can carry files. Default: both, WebRTC first. `udp` is not valid, because a browser has no UDP. |
+| `?lookup=relay` | How the page finds the receiver. `relay` is the only valid value, because a browser has no mDNS and no DHT. |
+| `?relay=<url>[,<url>]` | The relays the page uses, instead of the relays in the link. Each URL must use `https`. |
+
+An option that is not valid stops the page with the reason.
+
 ### Layout
 
 | Path | What it is |

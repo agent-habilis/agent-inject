@@ -15,7 +15,12 @@ import { AddButtons } from '../../components/add-buttons/index.tsx'
 import { CameraSheet } from '../../components/camera/index.tsx'
 import { FailedBody } from '../../components/failed-body/index.tsx'
 import { UploadList } from '../../components/upload-list/index.tsx'
-import { type Connection, connect, reconnectDelayMs } from '../../lib/client/index.ts'
+import {
+  type Connection,
+  connect,
+  parseOverrides,
+  reconnectDelayMs,
+} from '../../lib/client/index.ts'
 import { looksLikeTicket } from '../../lib/ticket/index.ts'
 import { type Item, UploadQueue } from '../../lib/upload-queue/index.ts'
 
@@ -186,11 +191,19 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
   }
 })
 
-/** The route: the ticket from the URL, re-keyed so a new ticket is a new session. */
+/**
+ * The route: the ticket from the URL, re-keyed so a new ticket is a new
+ * session. A bad override is a mistake in the link, not a network problem, so
+ * it fails at once instead of spending the redial budget.
+ */
 export const InjectPage = component(function* () {
   const params = useParams(this)
   yield () => {
     const ticket = params.value['ticket'] ?? ''
+    const overrides = parseOverrides()
+    if ('error' in overrides) {
+      return <FailedBody title="This link has a bad option" reason={overrides.error} />
+    }
     return <InjectSession key={ticket} ticket={ticket} connect={connect} />
   }
 })

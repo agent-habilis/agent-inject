@@ -53,18 +53,34 @@ impl InjectClient {
     }
 
     /// Dial the receiver named by `ticket`: over a WebRTC data channel, or
-    /// over the relay when that fails (see [`TRANSPORT`]). `relay_only`
-    /// skips WebRTC, to test the fallback from a network where ICE works.
+    /// over the relay when that fails (see [`TRANSPORT`]).
+    ///
+    /// The page's debugging overrides can only narrow that policy: `webrtc`
+    /// and `relay` switch a path off, and `relay_urls` names the relays to
+    /// home on instead of the ticket's ladder.
     ///
     /// # Errors
-    /// The ticket does not decode, or neither path connects.
+    /// The ticket or a relay URL does not parse, both paths are switched off,
+    /// or no allowed path connects.
     pub async fn connect(
         ticket: String,
-        relay_only: Option<bool>,
+        webrtc: Option<bool>,
+        relay: Option<bool>,
+        relay_urls: Option<Vec<String>>,
     ) -> Result<InjectClient, JsValue> {
         console_error_panic_hook::set_once();
         let ticket = InjectTicket::decode(&ticket).map_err(|error| err("decode ticket", &error))?;
-        connect_any(ticket, relay_only.unwrap_or(false)).await
+        let paths = Paths {
+            webrtc: TRANSPORT.webrtc && webrtc.unwrap_or(true),
+            relay: TRANSPORT.relay_transport && relay.unwrap_or(true),
+        };
+        if !paths.webrtc && !paths.relay {
+            return Err(JsValue::from_str(
+                "no transport left: allow webrtc, relay, or both",
+            ));
+        }
+        let home = signal_relay_mode(&ticket.lookups.relay, &relay_urls.unwrap_or_default())?;
+        connect_any(ticket, paths, home).await
     }
 
     /// `webrtc` or `relay`: the path the upload connection rides.
@@ -134,7 +150,34 @@ impl InjectClient {
 /// Only the signal endpoint may hold the relay: two same-key endpoints both
 /// registering with one relay fight over the registration and ICE never
 /// completes.
-async fn connect_any(ticket: InjectTicket, relay_only: bool) -> Result<InjectClient, JsValue> {
+/// Which paths this connect may use.
+#[derive(Debug, Clone, Copy)]
+struct Paths {
+    webrtc: bool,
+    relay: bool,
+}
+
+/// The relays the signal endpoint homes on: the override when there is one,
+/// else the ladder the ticket names.
+fn signal_relay_mode(choice: &RelayChoice, overrides: &[String]) -> Result<RelayMode, JsValue> {
+    if overrides.is_empty() {
+        return Ok(relay_mode(choice));
+    }
+    let urls = overrides
+        .iter()
+        .map(|raw| {
+            raw.parse::<fofoca::iroh::RelayUrl>()
+                .map_err(|error| err(&format!("relay URL {raw}"), &error))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(RelayMode::custom(urls))
+}
+
+async fn connect_any(
+    ticket: InjectTicket,
+    paths: Paths,
+    home: RelayMode,
+) -> Result<InjectClient, JsValue> {
     ensure_reachable_addr(&ticket.addr)?;
 
     let key = SecretKey::generate();
@@ -142,7 +185,7 @@ async fn connect_any(ticket: InjectTicket, relay_only: bool) -> Result<InjectCli
     let signal_bind = async {
         Endpoint::builder(presets::Minimal)
             .secret_key(key.clone())
-            .relay_mode(relay_mode(&ticket.lookups.relay))
+            .relay_mode(home)
             .bind()
             .await
             .map_err(|error| err("bind signal endpoint", &error))
@@ -161,14 +204,14 @@ async fn connect_any(ticket: InjectTicket, relay_only: bool) -> Result<InjectCli
     };
     let (signal_endpoint, endpoint) = futures::future::try_join(signal_bind, upload_bind).await?;
 
-    let webrtc = if relay_only || !TRANSPORT.webrtc {
-        Err(JsValue::from_str("skipped"))
+    let webrtc = if !paths.webrtc {
+        Err(JsValue::from_str("WebRTC is switched off"))
     } else {
         dial_webrtc(&signal_endpoint, &endpoint, &hub, &ticket, local).await
     };
     let (connection, session, data_path) = match webrtc {
         Ok((connection, session)) => (connection, Some(session), "webrtc"),
-        Err(webrtc_error) if TRANSPORT.relay_transport => {
+        Err(webrtc_error) if paths.relay => {
             web_sys::console::warn_1(&JsValue::from_str(&format!(
                 "[agent-inject] WebRTC failed, using the relay: {}",
                 describe(&webrtc_error)
@@ -397,7 +440,7 @@ mod tests {
     use agent_inject_proto::lookup::{LookupOpts, RelayChoice};
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{InjectClient, pinned_ladder, relay_mode};
+    use super::{InjectClient, pinned_ladder, relay_mode, signal_relay_mode};
 
     #[test]
     fn pinned_offers_the_agent_habilis_relay() {
@@ -419,6 +462,24 @@ mod tests {
                 .urls::<Vec<fofoca::iroh::RelayUrl>>()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn a_relay_override_replaces_the_ticket_ladder() {
+        let url = "https://relay.example/".to_owned();
+        let home = signal_relay_mode(&RelayChoice::Pinned, std::slice::from_ref(&url)).unwrap();
+        let offered: Vec<fofoca::iroh::RelayUrl> = home.relay_map().urls();
+        assert_eq!(offered, vec![url.parse().unwrap()]);
+
+        let default = signal_relay_mode(&RelayChoice::Pinned, &[]).unwrap();
+        assert_eq!(
+            default
+                .relay_map()
+                .urls::<Vec<fofoca::iroh::RelayUrl>>()
+                .len(),
+            pinned_ladder().len()
+        );
+        assert!(signal_relay_mode(&RelayChoice::Pinned, &["not a url".to_owned()]).is_err());
     }
 
     #[test]

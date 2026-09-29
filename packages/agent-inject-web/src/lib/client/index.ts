@@ -15,17 +15,92 @@ export interface Connection extends Uploader {
   close(): Promise<void>
 }
 
+/** Which paths may carry uploads, and which relays the page homes on. */
+export interface Overrides {
+  webrtc: boolean
+  relay: boolean
+  /** Empty means the ladder the ticket names. */
+  relayUrls: string[]
+}
+
 /**
- * `?transport=relay` skips WebRTC, to test the relay fallback from a network
- * where ICE works. A debugging switch, so it rides the query string.
+ * Read the debugging overrides from the query string, in fofoca's words:
+ *
+ * - `?transport=webrtc,relay` — what may carry uploads. Default both, WebRTC
+ *   first. A browser has no UDP.
+ * - `?lookup=relay` — how the page finds the receiver. A browser has no mDNS
+ *   and no DHT, so `relay` is the only valid entry.
+ * - `?relay=<url>[,<url>]` — the relays to home on instead of the ticket's.
+ *
+ * A bad value is an error rather than a silent default, so a typo cannot
+ * look like a network problem.
  */
-export function relayOnly(search: string = window.location.search): boolean {
-  return new URLSearchParams(search).get('transport') === 'relay'
+export function parseOverrides(search: string = window.location.search): Overrides | { error: string } {
+  const query = new URLSearchParams(search)
+  const overrides: Overrides = { webrtc: true, relay: true, relayUrls: [] }
+
+  const transport = query.get('transport')
+  if (transport !== null) {
+    const names = list(transport)
+    for (const name of names) {
+      if (name === 'udp') return { error: '?transport=udp: a browser has no UDP' }
+      if (name !== 'webrtc' && name !== 'relay') {
+        return { error: `?transport=${name}: expected webrtc or relay` }
+      }
+    }
+    overrides.webrtc = names.includes('webrtc')
+    overrides.relay = names.includes('relay')
+    if (!overrides.webrtc && !overrides.relay) {
+      return { error: '?transport= needs webrtc, relay, or both' }
+    }
+  }
+
+  const lookup = query.get('lookup')
+  if (lookup !== null) {
+    const names = list(lookup)
+    for (const name of names) {
+      if (name === 'mdns' || name === 'dht') {
+        return { error: `?lookup=${name}: a browser has no ${name === 'mdns' ? 'mDNS' : 'DHT'}` }
+      }
+      if (name !== 'relay') return { error: `?lookup=${name}: expected relay` }
+    }
+    if (!names.includes('relay')) return { error: '?lookup= needs relay' }
+  }
+
+  const relay = query.get('relay')
+  if (relay !== null) {
+    for (const raw of list(relay)) {
+      let url: URL
+      try {
+        url = new URL(raw)
+      } catch {
+        return { error: `?relay=${raw}: not a URL` }
+      }
+      // A page on HTTPS cannot open a plain-HTTP relay socket.
+      if (url.protocol !== 'https:') return { error: `?relay=${raw}: must be https` }
+      overrides.relayUrls.push(raw)
+    }
+  }
+  return overrides
+}
+
+function list(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
 }
 
 export async function connect(ticket: string): Promise<Connection> {
+  const overrides = parseOverrides()
+  if ('error' in overrides) throw new Error(overrides.error)
   const wasm = await loadWasm()
-  const client = await wasm.InjectClient.connect(ticket, relayOnly())
+  const client = await wasm.InjectClient.connect(
+    ticket,
+    overrides.webrtc,
+    overrides.relay,
+    overrides.relayUrls,
+  )
   return {
     dataPath: client.dataPath(),
     upload: (name, blob, uploadId, onProgress) => client.upload(name, blob, uploadId, onProgress),
