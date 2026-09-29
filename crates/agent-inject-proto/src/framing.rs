@@ -20,6 +20,7 @@
 //! then calls [`RequestHeader::decode`] on the whole header.
 
 use anyhow::{Context, Result, bail};
+use fofoca_protocol::TransportPolicy;
 
 /// The upload protocol.
 pub const UPLOAD_ALPN: &[u8] = b"agent-inject/upload/1";
@@ -27,6 +28,16 @@ pub const UPLOAD_ALPN: &[u8] = b"agent-inject/upload/1";
 /// The SDP offer/answer exchange that sets up the WebRTC data channel the
 /// upload connection then runs over.
 pub const WEBRTC_SIGNAL_ALPN: &[u8] = b"agent-inject/webrtc-signal/1";
+
+/// What may carry upload bytes, in fofoca's terms. A WebRTC data channel
+/// first; when ICE cannot open one (a phone behind carrier NAT), the relay.
+/// No UDP: the sender is a browser, which has none. How the two ends find
+/// each other is the relay lookup the ticket names.
+pub const TRANSPORT: TransportPolicy = TransportPolicy {
+    udp: false,
+    webrtc: true,
+    relay_transport: true,
+};
 
 /// Bearer secret carried by the ticket and presented on every upload.
 pub const SECRET_LEN: usize = 32;
@@ -231,7 +242,7 @@ impl Response {
 mod tests {
     use super::{
         MAX_MESSAGE_BYTES, MAX_NAME_BYTES, REQUEST_PREFIX_LEN, RequestHeader, Response, Status,
-        UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN, remaining_header_len,
+        TRANSPORT, UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN, remaining_header_len,
     };
 
     fn header(name: &str) -> RequestHeader {
@@ -241,6 +252,13 @@ mod tests {
             name: name.to_owned(),
             size: 0x0102_0304_0506_0708,
         }
+    }
+
+    #[test]
+    fn payload_rides_webrtc_then_the_relay() {
+        assert!(TRANSPORT.webrtc);
+        assert!(TRANSPORT.relay_transport);
+        assert!(!TRANSPORT.udp, "a browser has no UDP");
     }
 
     #[test]

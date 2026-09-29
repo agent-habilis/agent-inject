@@ -16,8 +16,8 @@
 pub use fofoca_protocol::ct_eq;
 
 pub use self::framing::{
-    CLOSE_UNAUTHORIZED, RequestHeader, Response, SECRET_LEN, Status, UPLOAD_ALPN, UPLOAD_ID_LEN,
-    WEBRTC_SIGNAL_ALPN,
+    CLOSE_UNAUTHORIZED, RequestHeader, Response, SECRET_LEN, Status, TRANSPORT, UPLOAD_ALPN,
+    UPLOAD_ID_LEN, WEBRTC_SIGNAL_ALPN,
 };
 pub use self::ticket::InjectTicket;
 

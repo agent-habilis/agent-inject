@@ -30,7 +30,7 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
 futures = "0.3"
-web-sys = { version = "0.3", features = ["Blob"] }
+web-sys = { version = "0.3", features = ["Blob", "console"] }
 # Both generations that reach wasm need their browser backend switched on.
 # 0.3+ additionally needs the `getrandom_backend` rustflag in
 # `.cargo/config.toml`; the feature alone is not enough.
