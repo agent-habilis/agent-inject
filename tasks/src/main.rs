@@ -5,6 +5,7 @@ use xshell::Shell;
 
 mod ci;
 mod fmt;
+mod install;
 mod lint;
 mod naming;
 mod run;
@@ -33,6 +34,8 @@ enum Task {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Install the binary.
+    Install,
     /// Run the CI gate.
     Ci,
     /// Format source files.
@@ -59,6 +62,7 @@ fn main() -> ExitCode {
     let outcome = match cli.task {
         Task::Test => test::run(&sh),
         Task::Run { args } => run::run(&sh, &args),
+        Task::Install => install::run(&sh),
         Task::Ci => ci::run(&sh),
         Task::Fmt => fmt::run(&sh),
         Task::Lint => lint::run(&sh),
