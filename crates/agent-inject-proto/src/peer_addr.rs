@@ -1,0 +1,49 @@
+//! `EndpointAddr` JSON codec, embedded in the inject ticket. Same shape as
+//! agent-share's, so both tools describe a peer the same way.
+
+use std::net::SocketAddr;
+
+use anyhow::{Context, Result};
+use fofoca_protocol::iroh_base::{EndpointAddr, EndpointId, RelayUrl};
+
+/// Serialize an `EndpointAddr` to a JSON value.
+#[must_use]
+pub fn endpoint_addr_to_json(addr: &EndpointAddr) -> serde_json::Value {
+    let ips: Vec<String> = addr.ip_addrs().map(ToString::to_string).collect();
+    let relay: Option<String> = addr.relay_urls().next().map(ToString::to_string);
+    serde_json::json!({
+        "id": addr.id.to_string(),
+        "ips": ips,
+        "relay": relay,
+    })
+}
+
+/// Deserialize an `EndpointAddr` from a JSON value produced by `endpoint_addr_to_json`.
+///
+/// Unparseable IPs and relay URLs are skipped rather than fatal: a peer that
+/// gained an address type this build does not understand should still be
+/// dialable on the ones it does.
+///
+/// # Errors
+/// The `id` field is missing or is not a valid `EndpointId` — without it
+/// there is nothing to dial.
+pub fn endpoint_addr_from_json(json: &serde_json::Value) -> Result<(EndpointId, EndpointAddr)> {
+    let id_str = json["id"].as_str().context("missing id")?;
+    let endpoint_id: EndpointId = id_str.parse().context("invalid EndpointId")?;
+    let mut addr = EndpointAddr::new(endpoint_id);
+    if let Some(ips) = json["ips"].as_array() {
+        for ip in ips {
+            if let Some(text) = ip.as_str()
+                && let Ok(socket) = text.parse::<SocketAddr>()
+            {
+                addr = addr.with_ip_addr(socket);
+            }
+        }
+    }
+    if let Some(relay) = json["relay"].as_str()
+        && let Ok(url) = relay.parse::<RelayUrl>()
+    {
+        addr = addr.with_relay_url(url);
+    }
+    Ok((endpoint_id, addr))
+}

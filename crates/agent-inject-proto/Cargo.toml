@@ -20,3 +20,11 @@ workspace = true
 # them agree on the bytes. CI checks it with
 # `cargo check --target wasm32-unknown-unknown -p agent-inject-proto`.
 [dependencies]
+# `iroh-base` through fofoca-protocol's re-export: the ticket carries an
+# `EndpointAddr`, and a second, published iroh-base would stop unifying with
+# the forked one the CLI reaches through fofoca.
+fofoca-protocol.workspace = true
+anyhow.workspace = true
+sha2.workspace = true
+bs58.workspace = true
+serde_json.workspace = true
