@@ -96,6 +96,16 @@ mod tests {
         );
     }
 
+    /// Safari rejects the certificate of a host that ends with a dot, so a
+    /// ticket naming such a relay never connects from an iPhone.
+    #[test]
+    fn no_pinned_relay_host_ends_with_a_dot() {
+        for url in pinned_ladder() {
+            let host = url.host_str().unwrap_or_default();
+            assert!(!host.ends_with('.'), "{url}");
+        }
+    }
+
     #[test]
     fn pinned_offers_the_agent_habilis_relay() {
         let ladder = pinned_ladder();
