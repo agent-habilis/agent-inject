@@ -58,6 +58,8 @@ function fakeConnection(): FakeConnection {
   return connection
 }
 
+const anyAccept = (): Promise<'any'> => Promise.resolve('any')
+
 function doneButton(): HTMLButtonElement {
   const button = host.querySelector<HTMLButtonElement>('[data-testid="done"]')
   if (!button) throw new Error('no done button')
@@ -79,6 +81,7 @@ test('an invalid link fails without dialling', async () => {
   root = render(
     InjectSession({
       ticket: 'not/base58!',
+      readAccept: anyAccept,
       connect: () => {
         dials += 1
         return Promise.reject(new Error('unreachable'))
@@ -98,6 +101,7 @@ test('picked files upload once connected, and a dropped link redials', async () 
   root = render(
     InjectSession({
       ticket: '3xYz',
+      readAccept: anyAccept,
       connect: () => {
         const opened = fakeConnection()
         connections.push(opened)
@@ -140,6 +144,7 @@ test('Done waits for uploads, finishes the session, and stops redialling', async
   root = render(
     InjectSession({
       ticket: '3xYz',
+      readAccept: anyAccept,
       connect: () => {
         const opened = fakeConnection()
         const upload = opened.upload
@@ -174,4 +179,25 @@ test('Done waits for uploads, finishes the session, and stops redialling', async
   connections[0]?.drop('closed by peer')
   await settle()
   expect(connections).toHaveLength(1)
+})
+
+test('a photos-only ticket hides the file picker, also before the mode is known', async () => {
+  let known: (accept: 'images') => void = () => {}
+  root = render(
+    InjectSession({
+      ticket: '3xYz',
+      readAccept: () =>
+        new Promise((resolve) => {
+          known = resolve
+        }),
+      connect: () => Promise.resolve(fakeConnection()),
+    }),
+    host,
+  )
+  await settle()
+  expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
+  known('images')
+  await settle()
+  expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
+  expect(host.querySelector('[data-testid="add-photo"]')).not.toBeNull()
 })

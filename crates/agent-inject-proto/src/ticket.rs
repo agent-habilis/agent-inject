@@ -39,6 +39,15 @@ pub enum Accept {
 }
 
 impl Accept {
+    /// Stable lowercase name, used by the web page.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Accept::Any => "any",
+            Accept::Images => "images",
+        }
+    }
+
     const fn to_byte(self) -> u8 {
         match self {
             Accept::Any => 0,
@@ -185,6 +194,12 @@ mod tests {
             let decoded = InjectTicket::decode(&original.encode()).unwrap();
             assert_eq!(decoded.accept, accept);
         }
+    }
+
+    #[test]
+    fn accept_labels_are_pinned() {
+        assert_eq!(Accept::Any.label(), "any");
+        assert_eq!(Accept::Images.label(), "images");
     }
 
     #[test]

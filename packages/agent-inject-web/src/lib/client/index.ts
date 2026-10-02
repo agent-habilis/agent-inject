@@ -93,6 +93,15 @@ function list(value: string): string[] {
     .filter((item) => item.length > 0)
 }
 
+/** What a session takes: any file, or images only. */
+export type Accept = 'any' | 'images'
+
+/** Read what the ticket's session takes, before the page connects. */
+export async function readAccept(ticket: string): Promise<Accept> {
+  const wasm = await loadWasm()
+  return wasm.InjectClient.parseTicket(ticket) === 'images' ? 'images' : 'any'
+}
+
 export async function connect(ticket: string): Promise<Connection> {
   const overrides = parseOverrides()
   if ('error' in overrides) throw new Error(overrides.error)

@@ -52,6 +52,15 @@ test('shows each status, and a retry for a failure', () => {
   expect(retried).toEqual([4])
 })
 
+test('a file the session does not accept gets no retry, since it would fail again', () => {
+  const items = [item(1, { status: 'failed', error: 'not_accepted: this session takes photos only' })]
+  root = render(UploadList({ items, onRetry: () => {} }), host)
+  flushSync()
+  const row = host.querySelector<HTMLElement>('[data-testid="upload-row"]')
+  expect(row?.textContent).toContain('this session takes photos only')
+  expect(row?.querySelector('button')).toBeNull()
+})
+
 test('sizes read in binary units', () => {
   expect(humanBytes(0)).toBe('0 B')
   expect(humanBytes(1536)).toBe('1.5 KB')

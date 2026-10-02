@@ -13,6 +13,8 @@ import { isAbort, pickFiles } from '../../lib/pick-files/index.ts'
 export interface AddButtonsProps {
   onFiles: (files: File[]) => void
   onCamera: () => void
+  /** Hide the any-file picker: the session takes photos only. */
+  photosOnly?: boolean
 }
 
 function pick(options: Parameters<typeof pickFiles>[0], onFiles: (files: File[]) => void): void {
@@ -21,7 +23,7 @@ function pick(options: Parameters<typeof pickFiles>[0], onFiles: (files: File[])
   })
 }
 
-export function AddButtons({ onFiles, onCamera }: AddButtonsProps) {
+export function AddButtons({ onFiles, onCamera, photosOnly = false }: AddButtonsProps) {
   return (
     <Stack direction="column" gap={1}>
       <Button
@@ -34,13 +36,15 @@ export function AddButtons({ onFiles, onCamera }: AddButtonsProps) {
       <Button variant="secondary" data-testid="camera" onclick={() => onCamera()}>
         Camera
       </Button>
-      <Button
-        variant="secondary"
-        data-testid="add-file"
-        onclick={() => pick({ multiple: true }, onFiles)}
-      >
-        Add file
-      </Button>
+      {photosOnly ? null : (
+        <Button
+          variant="secondary"
+          data-testid="add-file"
+          onclick={() => pick({ multiple: true }, onFiles)}
+        >
+          Add file
+        </Button>
+      )}
     </Stack>
   )
 }

@@ -114,6 +114,19 @@ test('retryFailed puts every failed file back in line after a reconnect', async 
   expect(second.calls.map((call) => call.name)).toEqual(['a', 'b'])
 })
 
+test('retryFailed leaves a file the session does not accept', async () => {
+  const { queue: q, latest } = queue(2)
+  const first = manualUploader()
+  q.setUploader(first.uploader)
+  q.add(files('a.pdf', 'b.jpg'))
+  first.calls[0]?.reject(new Error('not_accepted: this session takes photos only'))
+  first.calls[1]?.reject(new Error('lost'))
+  await tick()
+  q.setUploader(null)
+  q.retryFailed()
+  expect(latest().map((item) => item.status)).toEqual(['failed', 'queued'])
+})
+
 test('idle means nothing is queued or uploading; failures do not count', async () => {
   const { queue: q } = queue(1)
   expect(q.idle).toBe(true)
