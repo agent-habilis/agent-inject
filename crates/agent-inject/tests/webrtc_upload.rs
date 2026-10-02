@@ -11,7 +11,7 @@ use agent_inject::test_support::{
     ServeOpts, dial_webrtc, ensure_webrtc_selected, serve_with, upload, webrtc_only_addr,
 };
 use agent_inject_proto::lookup::LookupOpts;
-use agent_inject_proto::{RequestHeader, Status, UPLOAD_ALPN};
+use agent_inject_proto::{Accept, RequestHeader, Status, UPLOAD_ALPN};
 use fofoca::iroh::endpoint::presets;
 use fofoca::iroh::{Endpoint, RelayMode, SecretKey};
 use fofoca_iroh_webrtc_transport::{IceConfig, WebRtcHandle, WebRtcTransport};
@@ -52,6 +52,7 @@ async fn upload_rides_the_webrtc_data_channel() {
     let mut session = serve_with(ServeOpts {
         dir: dir.path().to_owned(),
         lookups: LookupOpts::loopback(),
+        accept: Accept::Any,
         ice: ice(),
     })
     .await

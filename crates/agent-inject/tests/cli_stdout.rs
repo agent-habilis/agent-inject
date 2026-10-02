@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
 
 use agent_inject::test_support::{finish, loopback_sender, upload};
-use agent_inject_proto::{InjectTicket, RequestHeader, Status, UPLOAD_ALPN};
+use agent_inject_proto::{Accept, InjectTicket, RequestHeader, Status, UPLOAD_ALPN};
 
 fn line(reader: &mut impl BufRead) -> serde_json::Value {
     let mut text = String::new();
@@ -100,4 +100,41 @@ async fn json_stdout_is_the_url_one_path_per_file_then_done() {
         .read_to_string(&mut stderr)
         .unwrap();
     assert!(stderr.is_empty(), "stderr is for errors only: {stderr:?}");
+}
+
+#[tokio::test]
+async fn accept_images_puts_the_mode_in_the_ticket_and_refuses_other_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agent-inject"))
+        .args(["--loopback", "--output", "json", "--accept", "images"])
+        .arg(dir.path())
+        .env("AGENT_INJECT_WEB_ORIGIN", "https://example.test")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn agent-inject");
+    let start = line(&mut BufReader::new(child.stdout.take().unwrap()));
+    let url = start["url"].as_str().unwrap();
+    assert!(
+        start["qr"].as_str().is_some_and(|qr| !qr.is_empty()),
+        "the agent prints this QR for the user: {start}"
+    );
+    let ticket = InjectTicket::decode(url.rsplit('/').next().unwrap()).unwrap();
+    assert_eq!(ticket.accept, Accept::Images);
+
+    let endpoint = loopback_sender().await.unwrap();
+    let conn = endpoint
+        .connect(ticket.addr.clone(), UPLOAD_ALPN)
+        .await
+        .unwrap();
+    let header = RequestHeader {
+        secret: ticket.secret,
+        upload_id: [1; 16],
+        name: "notes.pdf".to_owned(),
+        size: 3,
+    };
+    let response = upload(&conn, &header, b"abc").await.unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert_eq!(response.status, Status::NotAccepted);
 }

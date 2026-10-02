@@ -1,8 +1,8 @@
 //! Where the web app lives.
 
-/// Origin of the hosted web app. Placeholder until the app has a real host;
-/// `AGENT_INJECT_WEB_ORIGIN` overrides it, for a dev server or a tunnel.
-const WEB_ORIGIN: &str = "https://agent-inject.dev";
+/// Origin of the hosted web app. `AGENT_INJECT_WEB_ORIGIN` overrides it, for
+/// a dev server or a tunnel.
+const WEB_ORIGIN: &str = "https://inject.agent-habilis.com";
 
 /// The page a phone opens to send files into the session.
 pub(crate) fn web_url(ticket: &str) -> String {

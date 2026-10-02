@@ -6,6 +6,7 @@
 use std::io::Write as _;
 use std::path::PathBuf;
 
+use agent_inject_proto::Accept;
 use agent_inject_proto::lookup::{LookupOpts, RelayChoice};
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
@@ -19,8 +20,17 @@ use crate::web::web_url;
 pub(crate) enum OutputFormat {
     #[default]
     Human,
-    /// One JSON object per line: `{"url":…}` first, then `{"path":…}` per file.
+    /// One JSON object per line: `{"url":…,"qr":…}` first, then `{"path":…}`
+    /// per file.
     Json,
+}
+
+/// What the phone may send.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub(crate) enum AcceptArg {
+    #[default]
+    Any,
+    Images,
 }
 
 /// Receive photos and files from a phone into a directory.
@@ -31,6 +41,10 @@ pub(crate) struct Cli {
     dir: PathBuf,
     #[arg(long, value_enum, default_value_t)]
     output: OutputFormat,
+    /// What the phone may send. `images` hides the file picker and refuses
+    /// other files.
+    #[arg(long, value_enum, default_value_t)]
+    accept: AcceptArg,
     /// Do not print the QR code.
     #[arg(long)]
     no_qr: bool,
@@ -53,6 +67,10 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
     let mut session = serve_with(ServeOpts {
         dir: cli.dir.clone(),
         lookups,
+        accept: match cli.accept {
+            AcceptArg::Any => Accept::Any,
+            AcceptArg::Images => Accept::Images,
+        },
         ice: IceConfig::default(),
     })
     .await?;
@@ -87,12 +105,23 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
 }
 
 fn announce(cli: &Cli, url: &str) {
+    let qr = if cli.no_qr {
+        None
+    } else {
+        crate::qr::render(url)
+    };
     match cli.output {
-        OutputFormat::Json => println!("{}", serde_json::json!({ "url": url })),
+        // An agent runs this in the background, where nobody sees stdout, so
+        // the QR rides along for it to show.
+        OutputFormat::Json => {
+            let mut start = serde_json::json!({ "url": url });
+            if let Some(qr) = qr {
+                start["qr"] = qr.into();
+            }
+            println!("{start}");
+        }
         OutputFormat::Human => {
-            if !cli.no_qr
-                && let Some(code) = crate::qr::render(url)
-            {
+            if let Some(code) = qr {
                 println!("{code}");
             }
             status_out("Open", url);

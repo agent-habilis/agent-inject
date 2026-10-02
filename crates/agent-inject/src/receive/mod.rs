@@ -11,7 +11,9 @@ use std::sync::Mutex;
 use agent_inject_proto::framing::{
     OP_PREFIX_LEN, Op, REQUEST_PREFIX_LEN, decode_op, remaining_header_len,
 };
-use agent_inject_proto::{RequestHeader, Response, SECRET_LEN, Status, UPLOAD_ID_LEN, ct_eq};
+use agent_inject_proto::{
+    Accept, RequestHeader, Response, SECRET_LEN, Status, UPLOAD_ID_LEN, ct_eq,
+};
 use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufWriter};
 
@@ -28,6 +30,7 @@ pub(crate) struct ReceiveCtx {
     dir: PathBuf,
     secret: [u8; SECRET_LEN],
     max_size: Option<u64>,
+    accept: Accept,
     /// Upload id → final path, so a retry after a lost ack gets the same
     /// answer instead of a second copy.
     seen: Mutex<HashMap<[u8; UPLOAD_ID_LEN], PathBuf>>,
@@ -44,11 +47,17 @@ pub(crate) enum Outcome {
 }
 
 impl ReceiveCtx {
-    pub(crate) fn new(dir: PathBuf, secret: [u8; SECRET_LEN], max_size: Option<u64>) -> Self {
+    pub(crate) fn new(
+        dir: PathBuf,
+        secret: [u8; SECRET_LEN],
+        max_size: Option<u64>,
+        accept: Accept,
+    ) -> Self {
         Self {
             dir,
             secret,
             max_size,
+            accept,
             seen: Mutex::new(HashMap::new()),
         }
     }
@@ -156,6 +165,13 @@ async fn handle<R: AsyncRead + Unpin>(
             format!("{} bytes is over the {max}-byte limit", header.size),
         )));
     }
+    let name = name::sanitize(&header.name);
+    if !accepts(ctx.accept, &name) {
+        return Ok(Err((
+            Status::NotAccepted,
+            "this session takes photos only".to_owned(),
+        )));
+    }
     if let Some(path) = ctx.already_saved(&header.upload_id) {
         return Ok(match drain(recv, header.size).await? {
             BodyEnd::Exact => Ok((path, false)),
@@ -172,13 +188,30 @@ async fn handle<R: AsyncRead + Unpin>(
     if !matches!(end, BodyEnd::Exact) {
         return Ok(Err(truncated()));
     }
-    let name = name::sanitize(&header.name);
     let path = temp
         .finalize(&ctx.dir, &name)
         .await
         .context("save upload")?;
     ctx.remember(header.upload_id, path.clone());
     Ok(Ok((path, true)))
+}
+
+/// The header carries only a name, so the extension decides. HEIC is on the
+/// list because iPhone pickers hand over HEIC originals.
+fn accepts(accept: Accept, name: &str) -> bool {
+    const IMAGE_EXTENSIONS: &[&str] =
+        &["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "avif"];
+    match accept {
+        Accept::Any => true,
+        Accept::Images => std::path::Path::new(name)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| {
+                IMAGE_EXTENSIONS
+                    .iter()
+                    .any(|known| ext.eq_ignore_ascii_case(known))
+            }),
+    }
 }
 
 fn truncated() -> (Status, String) {
@@ -263,7 +296,7 @@ mod tests {
     use std::path::Path;
 
     use agent_inject_proto::framing::encode_done;
-    use agent_inject_proto::{RequestHeader, Response, Status};
+    use agent_inject_proto::{Accept, RequestHeader, Response, Status};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{Outcome, ReceiveCtx, receive_core};
@@ -310,7 +343,11 @@ mod tests {
     }
 
     fn ctx(dir: &Path) -> ReceiveCtx {
-        ReceiveCtx::new(dir.to_owned(), SECRET, Some(1024 * 1024))
+        ReceiveCtx::new(dir.to_owned(), SECRET, Some(1024 * 1024), Accept::Any)
+    }
+
+    fn images_ctx(dir: &Path) -> ReceiveCtx {
+        ReceiveCtx::new(dir.to_owned(), SECRET, Some(1024 * 1024), Accept::Images)
     }
 
     #[tokio::test]
@@ -361,10 +398,41 @@ mod tests {
     #[tokio::test]
     async fn oversize_upload_is_refused_before_writing() {
         let dir = tempfile::tempdir().unwrap();
-        let ctx = ReceiveCtx::new(dir.path().to_owned(), SECRET, Some(4));
+        let ctx = ReceiveCtx::new(dir.path().to_owned(), SECRET, Some(4), Accept::Any);
         let (outcome, _) = upload(&ctx, request("a.txt", 1, 5, b"12345", SECRET)).await;
         assert_eq!(outcome, Outcome::Refused(Status::TooLarge));
         assert!(entries(dir.path()).is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_images_session_refuses_other_files_before_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (outcome, response) = upload(
+            &images_ctx(dir.path()),
+            request("notes.pdf", 1, 2, b"hi", SECRET),
+        )
+        .await;
+        assert_eq!(outcome, Outcome::Refused(Status::NotAccepted));
+        assert_eq!(response.status, Status::NotAccepted);
+        assert!(entries(dir.path()).is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_images_session_takes_photos_in_any_case() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = images_ctx(dir.path());
+        for (id, name) in [(1u8, "a.jpg"), (2, "IMG_0001.HEIC"), (3, "b.png")] {
+            let (outcome, _) = upload(&ctx, request(name, id, 2, b"hi", SECRET)).await;
+            assert_eq!(outcome, Outcome::Saved(dir.path().join(name)));
+        }
+    }
+
+    #[tokio::test]
+    async fn an_any_session_takes_every_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let (outcome, _) =
+            upload(&ctx(dir.path()), request("notes.pdf", 1, 2, b"hi", SECRET)).await;
+        assert_eq!(outcome, Outcome::Saved(dir.path().join("notes.pdf")));
     }
 
     #[tokio::test]
