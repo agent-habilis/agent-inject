@@ -21,7 +21,6 @@ import { $ } from 'bun'
 
 const HTTPS_PORT = 8443
 const DEV_PORT = Number(process.env.DEV_PORT ?? 3000)
-const PROXY_PORT = DEV_PORT + 1
 const DEFAULT_DIR = '/tmp/agent-inject-inbox'
 const REPO_ROOT = new URL('../', import.meta.url).pathname
 
@@ -80,7 +79,7 @@ function startProxy(): ReturnType<typeof Bun.serve> {
   type Link = { url: string; headers: Headers; upstream?: WebSocket; pending: (string | Buffer)[] }
   return Bun.serve<Link>({
     hostname: '127.0.0.1',
-    port: PROXY_PORT,
+    port: 0,
     async fetch(req, server) {
       const url = new URL(req.url)
       const upstreamUrl = new URL(url.pathname + url.search, target)
