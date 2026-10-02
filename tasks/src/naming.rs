@@ -1,5 +1,6 @@
-//! File and directory naming: snake_case inside a crate, kebab-case everywhere
-//! else.
+//! File and directory naming: snake_case where Cargo reads Rust inside a crate
+//! (`src/`, `tests/`, `benches/`, `examples/`, `build.rs`), kebab-case
+//! everywhere else.
 //!
 //! Rust needs its own separator because a module file name *is* the module
 //! name — `mod mesh_key;` only ever finds `mesh_key.rs`, and spelling it
@@ -28,6 +29,7 @@ use crate::util::repo_root;
 /// `clippy.toml` already points at a `CLAUDE.md`, and the gate should not be
 /// what stops someone committing one. `Formula` is the folder Homebrew reads
 /// in a tap, and the release workflow copies ours into the tap as-is.
+/// `SKILL.md` is the one file name an agent reads in a skill folder.
 const ALLOWED: &[&str] = &[
     "AGENTS.md",
     "CLAUDE.md",
@@ -37,7 +39,12 @@ const ALLOWED: &[&str] = &[
     "Formula",
     "LICENSE",
     "README.md",
+    "SKILL.md",
 ];
+
+/// What Cargo reads as Rust under a crate root, so where file names are module
+/// names.
+const RUST_PATHS: &[&str] = &["src", "tests", "benches", "examples", "build.rs"];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Zone {
@@ -156,9 +163,14 @@ fn zone_of(prefix: &[&str], roots: &BTreeSet<String>) -> Zone {
     {
         return Zone::Kebab;
     }
-    let inside_crate = roots
-        .iter()
-        .any(|root| !root.is_empty() && path.starts_with(&format!("{root}/")));
+    // Snake only where Cargo looks for modules. Anything else under a crate,
+    // like `skills/`, is content, and keeps the repo's kebab-case.
+    let inside_crate = roots.iter().any(|root| {
+        !root.is_empty()
+            && RUST_PATHS
+                .iter()
+                .any(|rust| format!("{path}/").starts_with(&format!("{root}/{rust}/")))
+    });
     if inside_crate {
         Zone::Snake
     } else {
@@ -312,6 +324,20 @@ mod tests {
         assert!(zone("crates/agent-inject/src") == Zone::Snake);
         assert!(zone("crates/agent-inject/src/mesh_key.rs") == Zone::Snake);
         assert!(zone("tasks/src/web_image.rs") == Zone::Snake);
+        assert!(zone("crates/agent-inject/tests/cli_stdout.rs") == Zone::Snake);
+        assert!(zone("crates/agent-inject/build.rs") == Zone::Snake);
+    }
+
+    #[test]
+    fn content_under_a_crate_outside_its_rust_paths_is_kebab() {
+        // A skill folder is the slash-command name; agents read `SKILL.md`.
+        assert!(zone("crates/agent-inject/skills") == Zone::Kebab);
+        assert!(zone("crates/agent-inject/skills/inject-photo") == Zone::Kebab);
+        assert!(is_valid(
+            "inject-photo",
+            zone("crates/agent-inject/skills/inject-photo")
+        ));
+        assert!(is_valid("SKILL.md", Zone::Kebab));
     }
 
     #[test]

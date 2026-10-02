@@ -14,20 +14,23 @@ wakes you with the list of saved files.
 This skill needs a Bash command that runs in the background and wakes you when
 it exits (in Claude Code, `run_in_background: true`).
 
-## 1. Make the session folder
+## 1. Make a folder for the logs
 
 ```bash
-S=$(mktemp -d "${TMPDIR:-/tmp}/inject-photo.XXXXXX") && mkdir "$S/photos" && echo "$S"
+S=$(mktemp -d "${TMPDIR:-/tmp}/inject-photo.XXXXXX") && echo "$S"
 ```
 
-Keep the printed path. The next steps call it `<S>`.
+Keep the printed path. The next steps call it `<S>`. It holds only the
+output of the receiver. The photos go to a session folder that the receiver
+makes: `/tmp/agent-inject/<session-id>/`, or `$AGENT_INJECT_DIR/<session-id>/`
+when that variable is set.
 
 ## 2. Start the receiver in the background
 
 Run this command with `run_in_background: true`. Do not wait for it.
 
 ```bash
-agent-inject "<S>/photos" --accept images --output json > "<S>/out.jsonl" 2> "<S>/err.log"
+agent-inject --accept images --output json > "<S>/out.jsonl" 2> "<S>/err.log"
 ```
 
 `--accept images` hides the file picker on the phone. The receiver also
@@ -41,6 +44,7 @@ Run this command in the foreground. It waits up to 10 s for the link.
 S="<S>"
 for _ in $(seq 100); do grep -q '"url"' "$S/out.jsonl" && break; sleep 0.1; done
 sed -n 's/.*"url":"\([^"]*\)".*/\1/p' "$S/out.jsonl"
+sed -n '1s/.*"dir":"\([^"]*\)".*/\1/p' "$S/out.jsonl"
 printf '%b\n' "$(sed -n '1s/.*"qr":"\([^"]*\)".*/\1/p' "$S/out.jsonl")"
 cat "$S/err.log"
 ```
@@ -50,7 +54,8 @@ cat "$S/err.log"
   relay`. Then stop. Do not try again without a change.
 - If the output has a link, the user cannot see the tool output. Copy the QR
   code into your reply, in a code block, with no change to any character. Put
-  the link below it.
+  the link below it. Keep the second line of the output: it is the session
+  folder, called `<dir>` below.
 
 Tell the user to open the link on the phone, add the photos, and tap **Done**.
 Then end your turn.
@@ -70,11 +75,10 @@ tail -n 1 "<S>/out.jsonl"; cat "<S>/err.log"
   - If the current task needs what the photos show, read each photo with the
     Read tool.
 - Any other last line: the session stopped before Done. Show `err.log` to the
-  user exactly as it is. The photos that arrived are in `<S>/photos`.
+  user exactly as it is. The photos that arrived are in `<dir>`.
 
 ## Rules
 
 - If the user cancels before Done, stop the background task.
-- The photos stay in `<S>/photos`. Move or copy them only when the task needs
-  it.
+- The photos stay in `<dir>`. Move or copy them only when the task needs it.
 - One session per run. To get more photos, run the skill again.

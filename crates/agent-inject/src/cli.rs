@@ -1,4 +1,5 @@
-//! `agent-inject <dir>`: run one session until Done or ctrl-c.
+//! `agent-inject [dir]`: run one session until Done or ctrl-c. With no `dir`,
+//! the session saves into a fresh folder (see [`crate::session_dir`]).
 //! `agent-inject plug` / `unplug`: install or remove the agent skills.
 //!
 //! stdout carries everything a person or a script reads: the URL, the QR
@@ -22,8 +23,8 @@ use crate::web::web_url;
 pub(crate) enum OutputFormat {
     #[default]
     Human,
-    /// One JSON object per line: `{"url":…,"qr":…}` first, then `{"path":…}`
-    /// per file.
+    /// One JSON object per line: `{"url":…,"qr":…,"dir":…}` first, then
+    /// `{"path":…}` per file.
     Json,
 }
 
@@ -46,9 +47,10 @@ pub(crate) enum AcceptArg {
 pub(crate) struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
-    /// Directory the files are written into. Created if missing. A directory
-    /// named like a subcommand needs a path prefix, for example `./plug`.
-    #[arg(required = true)]
+    /// Directory the files are written into. Created if missing. Default: a
+    /// fresh `<session-id>` folder under `$AGENT_INJECT_DIR`, or under
+    /// `/tmp/agent-inject`. A directory named like a subcommand needs a path
+    /// prefix, for example `./plug`.
     dir: Option<PathBuf>,
     #[arg(long, value_enum, default_value_t)]
     output: OutputFormat,
@@ -88,10 +90,7 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
         Some(Command::Unplug { agents }) => return plug::unplug(agents),
         None => {}
     }
-    let dir = cli
-        .dir
-        .clone()
-        .expect("clap requires <DIR> without a subcommand");
+    let dir = crate::session_dir::resolve(cli.dir.clone());
     std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
     let lookups = if cli.loopback {
         LookupOpts::loopback()
@@ -103,7 +102,7 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
         }
     };
     let mut session = serve_with(ServeOpts {
-        dir: dir.clone(),
+        dir,
         lookups,
         accept: match cli.accept {
             AcceptArg::Any => Accept::Any,
@@ -113,7 +112,7 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
     })
     .await?;
     let url = web_url(&session.ticket.encode());
-    announce(&cli, &dir, &url);
+    announce(&cli, &session.dir, &url);
 
     let mut files = Vec::new();
     let finished = session.finished();
@@ -152,7 +151,7 @@ fn announce(cli: &Cli, dir: &std::path::Path, url: &str) {
         // An agent runs this in the background, where nobody sees stdout, so
         // the QR rides along for it to show.
         OutputFormat::Json => {
-            let mut start = serde_json::json!({ "url": url });
+            let mut start = serde_json::json!({ "url": url, "dir": dir });
             if let Some(qr) = qr {
                 start["qr"] = qr.into();
             }

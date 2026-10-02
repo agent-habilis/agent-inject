@@ -10,8 +10,13 @@ other. It never carries file data.
 ## Usage
 
 ```sh
-agent-inject <dir>
+agent-inject [dir]
 ```
+
+With no `dir`, each session saves into a fresh folder,
+`/tmp/agent-inject/<session-id>/`. The session id is the UTC start time and
+4 random hex digits, for example `2026-10-02T23-21-26-51d3`.
+`AGENT_INJECT_DIR` replaces `/tmp/agent-inject` as the base.
 
 1. Run the command. It prints a link and a QR code.
 2. Scan the QR code with the phone.
@@ -34,7 +39,8 @@ stdout carries the link, the QR code, and one line per saved file. stderr
 carries errors only.
 
 For a script or an agent, use `--output json`. Then stdout has one JSON object
-per line: `{"url": …, "qr": …}` first, then `{"path": …}` for each file.
+per line: `{"url": …, "qr": …, "dir": …}` first, then `{"path": …}` for each
+file. `dir` is the folder that the session saves into.
 `qr` is the QR code as text, for an agent that runs the command in the
 background and shows the code itself. `--no-qr` removes it. When the phone
 presses Done, the last line is `{"done": {"dir": …, "files": [ … ]}}`, with
@@ -104,12 +110,12 @@ Prerequisites:
   page).
 
 ```sh
-bun run dev:phone [dir]    # dir defaults to /tmp/agent-inject-inbox
+bun run dev:phone [dir]    # no dir: /tmp/agent-inject/<session-id>/
 ```
 
 1. The command starts the dev server and publishes it on the tailnet at
    `https://<this machine>:8443`. Only devices in the tailnet can open it.
-2. Then it runs `agent-inject <dir>` and prints the link and the QR code.
+2. Then it runs `agent-inject [dir]` and prints the link and the QR code.
 3. Scan the QR code with the phone.
 4. Press ctrl-c to stop. The command stops everything and removes the
    `tailscale serve` entry.
