@@ -12,7 +12,8 @@ use crate::token::{self, TokenType};
 /// A decoded inject ticket: the bearer secret, the session's relay config,
 /// and the receiver's address.
 ///
-/// Payload layout: `secret(32) ‖ lookups ‖ addr_len(u16 LE) ‖ addr_json`.
+/// Payload layout: `secret(32) ‖ lookups ‖ addr_len(u16 LE) ‖ addr_json ‖
+/// accept(1)`.
 /// Every field is self-delimiting, so a field can be appended later; a
 /// decoder ignores trailing bytes it does not know.
 ///
@@ -25,6 +26,33 @@ pub struct InjectTicket {
     pub addr: EndpointAddr,
     pub secret: [u8; SECRET_LEN],
     pub lookups: LookupOpts,
+    pub accept: Accept,
+}
+
+/// What the session takes. The page shows only the matching pickers, and the
+/// receiver refuses the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Accept {
+    #[default]
+    Any,
+    Images,
+}
+
+impl Accept {
+    const fn to_byte(self) -> u8 {
+        match self {
+            Accept::Any => 0,
+            Accept::Images => 1,
+        }
+    }
+
+    fn from_byte(byte: u8) -> Result<Self> {
+        Ok(match byte {
+            0 => Accept::Any,
+            1 => Accept::Images,
+            other => bail!("unknown accept mode in ticket: {other}"),
+        })
+    }
 }
 
 impl InjectTicket {
@@ -46,6 +74,7 @@ impl InjectTicket {
                 .to_le_bytes(),
         );
         payload.extend_from_slice(&addr_json);
+        payload.push(self.accept.to_byte());
         token::encode(TokenType::Inject, &payload)
     }
 
@@ -71,10 +100,16 @@ impl InjectTicket {
         let json: serde_json::Value =
             serde_json::from_slice(addr_raw).context("ticket address is not JSON")?;
         let (_, addr) = endpoint_addr_from_json(&json)?;
+        // Tickets from before `accept` existed end at the address.
+        let accept = payload
+            .get(end)
+            .copied()
+            .map_or(Ok(Accept::Any), Accept::from_byte)?;
         Ok(Self {
             addr,
             secret,
             lookups,
+            accept,
         })
     }
 }
@@ -83,7 +118,7 @@ impl InjectTicket {
 mod tests {
     use fofoca_protocol::iroh_base::{EndpointAddr, SecretKey};
 
-    use super::InjectTicket;
+    use super::{Accept, InjectTicket};
     use crate::lookup::{LookupOpts, RelayChoice};
     use crate::token::{self, TokenType};
 
@@ -99,6 +134,7 @@ mod tests {
             addr: fixed_addr(),
             secret: [5u8; 32],
             lookups,
+            accept: Accept::Any,
         }
     }
 
@@ -130,12 +166,48 @@ mod tests {
         assert_eq!(payload[..32], [5u8; 32]);
         assert_eq!(payload[32], 0, "loopback lookup flags");
         let addr_len = usize::from(u16::from_le_bytes([payload[33], payload[34]]));
-        assert_eq!(payload.len(), 35 + addr_len);
+        assert_eq!(payload.len(), 36 + addr_len);
+        assert_eq!(payload[35 + addr_len], 0, "accept any");
         assert_eq!(
             encoded,
             ticket(LookupOpts::loopback()).encode(),
             "deterministic"
         );
+    }
+
+    #[test]
+    fn accept_round_trips() {
+        for accept in [Accept::Any, Accept::Images] {
+            let original = InjectTicket {
+                accept,
+                ..ticket(LookupOpts::loopback())
+            };
+            let decoded = InjectTicket::decode(&original.encode()).unwrap();
+            assert_eq!(decoded.accept, accept);
+        }
+    }
+
+    #[test]
+    fn a_ticket_without_accept_takes_any() {
+        let original = InjectTicket {
+            accept: Accept::Images,
+            ..ticket(LookupOpts::loopback())
+        };
+        let (_, mut payload) = token::decode(&original.encode()).unwrap();
+        let addr_len = usize::from(u16::from_le_bytes([payload[33], payload[34]]));
+        payload.truncate(35 + addr_len);
+        let older = token::encode(TokenType::Inject, &payload);
+        assert_eq!(InjectTicket::decode(&older).unwrap().accept, Accept::Any);
+    }
+
+    #[test]
+    fn rejects_an_unknown_accept() {
+        let (_, mut payload) = token::decode(&ticket(LookupOpts::loopback()).encode()).unwrap();
+        *payload.last_mut().unwrap() = 9;
+        let error = InjectTicket::decode(&token::encode(TokenType::Inject, &payload))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("accept"), "{error}");
     }
 
     #[test]

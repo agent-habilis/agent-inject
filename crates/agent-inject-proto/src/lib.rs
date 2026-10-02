@@ -19,7 +19,7 @@ pub use self::framing::{
     CLOSE_UNAUTHORIZED, RequestHeader, Response, SECRET_LEN, Status, TRANSPORT, UPLOAD_ALPN,
     UPLOAD_ID_LEN, WEBRTC_SIGNAL_ALPN,
 };
-pub use self::ticket::InjectTicket;
+pub use self::ticket::{Accept, InjectTicket};
 
 pub mod framing;
 pub mod lookup;
