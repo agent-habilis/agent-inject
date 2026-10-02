@@ -32,6 +32,7 @@ fofoca = { workspace = true, features = ["host"] }
 fofoca-iroh-webrtc-transport = { workspace = true, features = ["native"] }
 clap = { version = "4", features = ["derive"] }
 qrcode = { version = "0.14", default-features = false }
+include_dir = "0.7"
 serde_json.workspace = true
 tokio.workspace = true
 anyhow.workspace = true

@@ -7,6 +7,7 @@ use clap::Parser;
 pub(crate) mod cli;
 pub(crate) mod endpoint;
 pub(crate) mod handlers;
+pub(crate) mod plug;
 pub(crate) mod qr;
 pub(crate) mod receive;
 pub(crate) mod serve;

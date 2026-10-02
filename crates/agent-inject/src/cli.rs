@@ -1,4 +1,5 @@
-//! `agent-inject <dir>`: run one session until ctrl-c.
+//! `agent-inject <dir>`: run one session until Done or ctrl-c.
+//! `agent-inject plug` / `unplug`: install or remove the agent skills.
 //!
 //! stdout carries everything a person or a script reads: the URL, the QR
 //! code, and one absolute path per saved file. stderr carries errors only.
@@ -9,9 +10,10 @@ use std::path::PathBuf;
 use agent_inject_proto::Accept;
 use agent_inject_proto::lookup::{LookupOpts, RelayChoice};
 use anyhow::{Context, Result};
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use fofoca_iroh_webrtc_transport::IceConfig;
 
+use crate::plug::{self, Agent};
 use crate::serve::{ServeOpts, serve_with};
 use crate::util::output::{home_path, status_out};
 use crate::web::web_url;
@@ -35,10 +37,19 @@ pub(crate) enum AcceptArg {
 
 /// Receive photos and files from a phone into a directory.
 #[derive(Debug, Parser)]
-#[command(name = "agent-inject", version)]
+#[command(
+    name = "agent-inject",
+    version,
+    args_conflicts_with_subcommands = true,
+    subcommand_negates_reqs = true
+)]
 pub(crate) struct Cli {
-    /// Directory the files are written into. Created if missing.
-    dir: PathBuf,
+    #[command(subcommand)]
+    command: Option<Command>,
+    /// Directory the files are written into. Created if missing. A directory
+    /// named like a subcommand needs a path prefix, for example `./plug`.
+    #[arg(required = true)]
+    dir: Option<PathBuf>,
     #[arg(long, value_enum, default_value_t)]
     output: OutputFormat,
     /// What the phone may send. `images` hides the file picker and refuses
@@ -53,8 +64,35 @@ pub(crate) struct Cli {
     loopback: bool,
 }
 
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Install the agent skills (for example `/inject-photo`).
+    Plug {
+        /// The agent to install into. Repeat for more. Default: every agent
+        /// found on this machine.
+        #[arg(long = "agent", value_enum)]
+        agents: Vec<Agent>,
+    },
+    /// Remove the agent skills.
+    Unplug {
+        /// The agent to remove from. Repeat for more. Default: every agent
+        /// that has them.
+        #[arg(long = "agent", value_enum)]
+        agents: Vec<Agent>,
+    },
+}
+
 pub(crate) async fn run(cli: Cli) -> Result<()> {
-    std::fs::create_dir_all(&cli.dir).with_context(|| format!("create {}", cli.dir.display()))?;
+    match &cli.command {
+        Some(Command::Plug { agents }) => return plug::plug(agents),
+        Some(Command::Unplug { agents }) => return plug::unplug(agents),
+        None => {}
+    }
+    let dir = cli
+        .dir
+        .clone()
+        .expect("clap requires <DIR> without a subcommand");
+    std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
     let lookups = if cli.loopback {
         LookupOpts::loopback()
     } else {
@@ -65,7 +103,7 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
         }
     };
     let mut session = serve_with(ServeOpts {
-        dir: cli.dir.clone(),
+        dir: dir.clone(),
         lookups,
         accept: match cli.accept {
             AcceptArg::Any => Accept::Any,
@@ -75,7 +113,7 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
     })
     .await?;
     let url = web_url(&session.ticket.encode());
-    announce(&cli, &url);
+    announce(&cli, &dir, &url);
 
     let mut files = Vec::new();
     let finished = session.finished();
@@ -104,7 +142,7 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
     Ok(())
 }
 
-fn announce(cli: &Cli, url: &str) {
+fn announce(cli: &Cli, dir: &std::path::Path, url: &str) {
     let qr = if cli.no_qr {
         None
     } else {
@@ -125,7 +163,7 @@ fn announce(cli: &Cli, url: &str) {
                 println!("{code}");
             }
             status_out("Open", url);
-            status_out("Saving", &format!("to {}", home_path(&cli.dir)));
+            status_out("Saving", &format!("to {}", home_path(dir)));
             status_out(
                 "Waiting",
                 "for files; press Done on the phone, or ctrl-c to stop",
