@@ -40,15 +40,16 @@ pub struct InjectClient {
 
 #[wasm_bindgen]
 impl InjectClient {
-    /// Validate a ticket without dialling, so the page can reject a bad link
-    /// before it spends a connection on it.
+    /// Validate a ticket without dialling, and return what the session
+    /// accepts (`any` or `images`), so the page shows the right pickers
+    /// before it connects.
     ///
     /// # Errors
     /// The ticket does not decode.
     #[wasm_bindgen(js_name = parseTicket)]
-    pub fn parse_ticket(ticket: &str) -> Result<(), JsValue> {
+    pub fn parse_ticket(ticket: &str) -> Result<String, JsValue> {
         InjectTicket::decode(ticket)
-            .map(|_| ())
+            .map(|ticket| ticket.accept.label().to_owned())
             .map_err(|error| err("decode ticket", &error))
     }
 
@@ -494,5 +495,21 @@ mod tests {
     #[test]
     fn parse_ticket_rejects_garbage() {
         assert!(InjectClient::parse_ticket("not-a-ticket").is_err());
+    }
+
+    #[test]
+    fn parse_ticket_returns_what_the_session_accepts() {
+        let ticket = agent_inject_proto::InjectTicket {
+            addr: fofoca::iroh::EndpointAddr::new(
+                fofoca::iroh::SecretKey::from_bytes(&[3u8; 32]).public(),
+            ),
+            secret: [5u8; 32],
+            lookups: agent_inject_proto::lookup::LookupOpts::loopback(),
+            accept: agent_inject_proto::Accept::Images,
+        };
+        assert_eq!(
+            InjectClient::parse_ticket(&ticket.encode()).unwrap(),
+            "images"
+        );
     }
 }

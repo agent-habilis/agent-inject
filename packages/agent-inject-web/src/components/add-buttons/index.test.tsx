@@ -28,8 +28,8 @@ afterEach(() => {
   root = null
 })
 
-function mount(onCamera = (): void => {}): void {
-  root = render(AddButtons({ onFiles: () => {}, onCamera }), host)
+function mount(onCamera = (): void => {}, photosOnly = false): void {
+  root = render(AddButtons({ onFiles: () => {}, onCamera, photosOnly }), host)
   flushSync()
 }
 
@@ -65,4 +65,11 @@ test('Camera hands off to the camera sheet', () => {
   button('camera').click()
   expect(opened).toBe(1)
   expect(clicked).toHaveLength(0)
+})
+
+test('a photos-only session has no file picker', () => {
+  mount(undefined, true)
+  expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
+  expect(button('add-photo')).toBeTruthy()
+  expect(button('camera')).toBeTruthy()
 })

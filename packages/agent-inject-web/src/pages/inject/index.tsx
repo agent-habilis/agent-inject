@@ -17,9 +17,11 @@ import { CameraSheet } from '../../components/camera/index.tsx'
 import { FailedBody } from '../../components/failed-body/index.tsx'
 import { UploadList } from '../../components/upload-list/index.tsx'
 import {
+  type Accept,
   type Connection,
   connect,
   parseOverrides,
+  readAccept,
   reconnectDelayMs,
 } from '../../lib/client/index.ts'
 import { looksLikeTicket } from '../../lib/ticket/index.ts'
@@ -39,6 +41,7 @@ type Phase =
 export interface InjectSessionProps {
   ticket: string
   connect: (ticket: string) => Promise<Connection>
+  readAccept: (ticket: string) => Promise<Accept>
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -70,6 +73,18 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
   )
   const items = signal<readonly Item[]>([])
   const cameraOpen = signal(false)
+  // Unknown until the ticket is read. The file picker stays hidden until
+  // then, so a photos-only page never flashes it.
+  const accept = signal<Accept | null>(null)
+  if (looksLikeTicket(ticket)) {
+    props.readAccept(ticket).then(
+      (read) => {
+        accept.value = read
+      },
+      // A ticket that does not decode fails the dial, which says why.
+      () => {},
+    )
+  }
   const queue = new UploadQueue({
     concurrency: 2,
     onChange: (next) => {
@@ -213,6 +228,7 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
             </Box>
           ) : (
             <AddButtons
+              photosOnly={accept.value !== 'any'}
               onFiles={add}
               onCamera={() => {
                 cameraOpen.value = true
@@ -247,6 +263,6 @@ export const InjectPage = component(function* () {
     if ('error' in overrides) {
       return <FailedBody title="This link has a bad option" reason={overrides.error} />
     }
-    return <InjectSession key={ticket} ticket={ticket} connect={connect} />
+    return <InjectSession key={ticket} ticket={ticket} connect={connect} readAccept={readAccept} />
   }
 })

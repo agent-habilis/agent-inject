@@ -2,7 +2,7 @@
 
 import { Button, MiddleTruncate, ProgressBar, Stack, Text } from 'moonspace-dom'
 
-import type { Item } from '../../lib/upload-queue/index.ts'
+import { type Item, isRefusedForGood } from '../../lib/upload-queue/index.ts'
 
 export function humanBytes(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -39,9 +39,11 @@ function status(item: Item, onRetry: (id: number) => void) {
           <Text color="danger" class="selectable">
             {item.error ?? 'failed'}
           </Text>
-          <Button variant="ghost" onclick={() => onRetry(item.id)}>
-            Retry
-          </Button>
+          {isRefusedForGood(item) ? null : (
+            <Button variant="ghost" onclick={() => onRetry(item.id)}>
+              Retry
+            </Button>
+          )}
         </Stack>
       )
   }

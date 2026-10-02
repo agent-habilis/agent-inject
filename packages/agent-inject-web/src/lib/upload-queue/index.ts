@@ -45,6 +45,11 @@ export function isIdle(items: readonly Item[]): boolean {
   return items.every((item) => item.status === 'saved' || item.status === 'failed')
 }
 
+/** Refused for what the file is, so sending it again fails the same way. */
+export function isRefusedForGood(item: Item): boolean {
+  return item.status === 'failed' && item.error?.startsWith('not_accepted:') === true
+}
+
 function randomUploadId(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(16))
 }
@@ -102,7 +107,7 @@ export class UploadQueue {
   /** Put every failed file back in line, as after a reconnect. */
   retryFailed(): void {
     for (const item of this.#items) {
-      if (item.status === 'failed') this.#requeue(item)
+      if (item.status === 'failed' && !isRefusedForGood(item)) this.#requeue(item)
     }
     this.#changed()
     this.#pump()
