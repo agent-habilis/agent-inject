@@ -57,27 +57,48 @@ if (!initial) {
   process.exit(1)
 }
 
-const server = Bun.serve({
-  port: Number(process.env.PORT ?? 3000),
-  routes: {
-    '/wasm/:name': async (req) => {
-      const current = await currentAsset()
-      if (current && req.params.name === current.name) {
-        return wasmResponse(current, req.headers.get('accept-encoding'))
-      }
-      // Never the SPA shell: a page asking for a hash we do not have is stale.
-      return new Response(
-        `no such wasm build: ${req.params.name}\ncurrent: ${current?.name ?? 'none'}\n` +
-          'this page predates the current build; hard-refresh it\n',
-        { status: 404, headers: { 'content-type': 'text/plain;charset=utf-8' } },
-      )
+const BASE_PORT = 3000
+const PORT_ATTEMPTS = 10
+
+const serve = (port: number) =>
+  Bun.serve({
+    port,
+    routes: {
+      '/wasm/:name': async (req) => {
+        const current = await currentAsset()
+        if (current && req.params.name === current.name) {
+          return wasmResponse(current, req.headers.get('accept-encoding'))
+        }
+        // Never the SPA shell: a page asking for a hash we do not have is stale.
+        return new Response(
+          `no such wasm build: ${req.params.name}\ncurrent: ${current?.name ?? 'none'}\n` +
+            'this page predates the current build; hard-refresh it\n',
+          { status: 404, headers: { 'content-type': 'text/plain;charset=utf-8' } },
+        )
+      },
+      '/app': index,
+      '/app/*': index,
     },
-    '/app': index,
-    '/app/*': index,
-  },
-  fetch: () => Response.redirect('/app', 302),
-  development: { hmr: true, console: true },
-})
+    fetch: () => Response.redirect('/app', 302),
+    development: { hmr: true, console: true },
+  })
+
+// An explicit PORT stays strict: `dev-phone.ts` sets it and then polls that
+// exact port, so moving up the ladder would break it silently.
+function serveOnFreePort() {
+  if (process.env.PORT) return serve(Number(process.env.PORT))
+  for (let port = BASE_PORT; port < BASE_PORT + PORT_ATTEMPTS; port++) {
+    try {
+      return serve(port)
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'EADDRINUSE') throw err
+    }
+  }
+  console.error(`ports ${BASE_PORT}–${BASE_PORT + PORT_ATTEMPTS - 1} are all in use; set PORT`)
+  process.exit(1)
+}
+
+const server = serveOnFreePort()
 
 // Watch the directory rather than the file: a rebuild replaces the file, and a
 // watch on the path would follow the old inode. Debounced because

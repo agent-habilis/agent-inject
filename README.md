@@ -59,7 +59,7 @@ Prerequisites: Rust (the toolchain in `rust-toolchain.toml`), the
 ```sh
 cargo task ci         # the full gate: names, fmt, clippy, tests, web, wasm
 cargo task web-wasm   # build the browser client into packages/agent-inject-wasm
-bun run dev           # web app with hot reload on http://localhost:3000/app
+bun run dev           # web app with hot reload on :3000/app (next free port up to :3009)
 bun run build         # production bundle into dist/
 bun run start         # serve dist/
 ```
