@@ -34,7 +34,9 @@ stdout carries the link, the QR code, and one line per saved file. stderr
 carries errors only.
 
 For a script or an agent, use `--output json`. Then stdout has one JSON object
-per line: `{"url": …}` first, then `{"path": …}` for each file. When the phone
+per line: `{"url": …, "qr": …}` first, then `{"path": …}` for each file.
+`qr` is the QR code as text, for an agent that runs the command in the
+background and shows the code itself. `--no-qr` removes it. When the phone
 presses Done, the last line is `{"done": {"dir": …, "files": [ … ]}}`, with
 every file of the session, and the command exits 0. After ctrl-c there is no
 `done` line, so a caller can tell a finished session from a stopped one.
@@ -46,9 +48,29 @@ stays out of the result.
 |---|---|
 | `--output human\|json` | Output format. Default: `human`. |
 | `--no-qr` | Do not print the QR code. |
+| `--accept any\|images` | What the phone can send. `images` removes **Add file** from the page, and the command refuses other files. Default: `any`. |
 
-`AGENT_INJECT_WEB_ORIGIN` sets the origin of the web page in the link, for a
-dev server or a tunnel.
+The link opens `https://inject.agent-habilis.com`. `AGENT_INJECT_WEB_ORIGIN`
+sets another origin, for a dev server or a tunnel.
+
+## Agent skills
+
+```sh
+agent-inject plug     # install the skills into ~/.claude/skills and ~/.agents/skills
+agent-inject unplug   # remove them
+```
+
+`--agent claude-code` or `--agent generic` selects one agent. With no flag,
+`plug` installs into each agent that it finds on this machine.
+
+- `/inject-photo` receives photos from the phone into the session. The agent
+  starts `agent-inject --accept images` in the background and shows the link
+  and the QR code. When you press **Done**, the command stops and the agent
+  gets the paths of the photos.
+
+To try a skill against a local page, run `bun run dev:phone`, and set
+`AGENT_INJECT_WEB_ORIGIN=https://<this machine>:8443` in the shell that starts
+the agent.
 
 ## Development
 
