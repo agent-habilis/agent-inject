@@ -61,7 +61,9 @@ export function UploadList({
       {items.map((item) => (
         <Stack direction="column" data-testid="upload-row" data-status={item.status}>
           <Stack direction="row" gap={1} justify="between">
-            <MiddleTruncate value={item.name} />
+            {/* Zero basis: MiddleTruncate measures its own width, so a width
+                set by its text would shrink with each truncation. */}
+            <MiddleTruncate value={item.name} style={{ flex: '1 1 0' }} />
             <Text color="fgMuted">{humanBytes(item.size)}</Text>
           </Stack>
           {status(item, onRetry)}

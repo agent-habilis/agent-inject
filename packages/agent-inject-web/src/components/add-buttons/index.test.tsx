@@ -73,3 +73,14 @@ test('a photos-only session has no file picker', () => {
   expect(button('add-photo')).toBeTruthy()
   expect(button('camera')).toBeTruthy()
 })
+
+test('Add photo and Camera share one look, so Done is the only call to action', () => {
+  mount()
+  expect(button('add-photo').dataset['variant']).toBe(button('camera').dataset['variant'])
+})
+
+test('the labels sit in the middle of the buttons', () => {
+  mount()
+  expect(button('add-photo').dataset['block']).toBe('true')
+  expect(button('camera').dataset['block']).toBe('true')
+})

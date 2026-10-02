@@ -15,6 +15,7 @@ import { AddButtons } from '../../components/add-buttons/index.tsx'
 import { Centered } from '../../components/centered/index.tsx'
 import { CameraSheet } from '../../components/camera/index.tsx'
 import { FailedBody } from '../../components/failed-body/index.tsx'
+import { Header } from '../../components/header/index.tsx'
 import { UploadList } from '../../components/upload-list/index.tsx'
 import {
   type Accept,
@@ -26,6 +27,9 @@ import {
 } from '../../lib/client/index.ts'
 import { looksLikeTicket } from '../../lib/ticket/index.ts'
 import { type Item, UploadQueue, isIdle } from '../../lib/upload-queue/index.ts'
+
+/** The button column: narrower than the page, centred in it. */
+const BUTTONS = { width: '100%', maxWidth: '32ch', margin: '0 auto' }
 
 /** Dials in a row that may fail before the page gives up and asks. */
 const MAX_FAILED_DIALS = 4
@@ -160,24 +164,50 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
 
   function statusLine() {
     const current = phase.value
+    let status: { color: 'fgMuted' | 'success' | 'warning'; label: string; title?: string; selectable?: boolean }
     switch (current.kind) {
       case 'connecting':
-        return <Text color="fgMuted">connecting…</Text>
+        status = { color: 'fgMuted', label: 'connecting…' }
+        break
       case 'connected':
-        return <Text color="success">connected ({current.dataPath})</Text>
+        // Which path carries the bytes is a debugging detail, so it is a tooltip.
+        status = { color: 'success', label: 'connected', title: `over ${current.dataPath}` }
+        break
       case 'reconnecting':
-        return (
-          <Text color="warning" class="selectable">
-            reconnecting — {current.reason}
-          </Text>
-        )
+        // The reason truncates in the bar; the tooltip keeps all of it.
+        status = {
+          color: 'warning',
+          label: `reconnecting — ${current.reason}`,
+          title: current.reason,
+          selectable: true,
+        }
+        break
       case 'finishing':
-        return <Text color="fgMuted">finishing…</Text>
+        status = { color: 'fgMuted', label: 'finishing…' }
+        break
       case 'failed':
+        return (
+          <Button variant="ghost" onclick={() => start()}>
+            Reconnect
+          </Button>
+        )
       case 'finished':
         return null
     }
+    return (
+      <Text
+        color={status.color}
+        truncate
+        class={status.selectable ? 'selectable' : undefined}
+        data-testid="inject-status"
+        title={status.title}
+      >
+        {status.label}
+      </Text>
+    )
   }
+
+
 
   yield () => {
     const current = phase.value
@@ -205,46 +235,50 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
         </Stack>
       )
     }
+    // Done means "I sent what I meant to", so it waits for a file to land.
+    const canFinish =
+      current.kind === 'connected' &&
+      isIdle(items.value) &&
+      items.value.some((item) => item.status === 'saved')
     return (
-      <div style={{ padding: '1em 2ch', maxWidth: '72ch', margin: '0 auto' }}>
-        <Stack direction="column" gap={1} data-testid="inject-page">
-          <Stack direction="row" gap={1}>
-            <Text weight="bold">agent-inject</Text>
-            {statusLine()}
-            {current.kind === 'failed' ? (
-              <Button variant="ghost" onclick={() => start()}>
-                Reconnect
+      <div>
+        <Header trailing={statusLine()} />
+        <div style={{ padding: '1em 2ch', maxWidth: '72ch', margin: '0 auto' }}>
+          <Stack direction="column" gap={1} data-testid="inject-page">
+            {cameraOpen.value ? (
+              <Box border="line" padX={1} padY={1}>
+                <CameraSheet
+                  onShot={(file: File) => add([file])}
+                  onClose={() => {
+                    cameraOpen.value = false
+                  }}
+                />
+              </Box>
+            ) : (
+              <div style={BUTTONS}>
+                <AddButtons
+                  photosOnly={accept.value !== 'any'}
+                  onFiles={add}
+                  onCamera={() => {
+                    cameraOpen.value = true
+                  }}
+                />
+              </div>
+            )}
+            <div style={BUTTONS}>
+              <Button
+                variant={canFinish ? 'primary' : 'secondary'}
+                block
+                data-testid="done"
+                disabled={!canFinish}
+                onclick={() => void finish()}
+              >
+                Done
               </Button>
-            ) : null}
+            </div>
+            <UploadList items={items.value} onRetry={(id) => queue.retry(id)} />
           </Stack>
-          {cameraOpen.value ? (
-            <Box border="line" padX={1} padY={1}>
-              <CameraSheet
-                onShot={(file: File) => add([file])}
-                onClose={() => {
-                  cameraOpen.value = false
-                }}
-              />
-            </Box>
-          ) : (
-            <AddButtons
-              photosOnly={accept.value !== 'any'}
-              onFiles={add}
-              onCamera={() => {
-                cameraOpen.value = true
-              }}
-            />
-          )}
-          <Button
-            variant="secondary"
-            data-testid="done"
-            disabled={current.kind !== 'connected' || !isIdle(items.value)}
-            onclick={() => void finish()}
-          >
-            Done
-          </Button>
-          <UploadList items={items.value} onRetry={(id) => queue.retry(id)} />
-        </Stack>
+        </div>
       </div>
     )
   }
