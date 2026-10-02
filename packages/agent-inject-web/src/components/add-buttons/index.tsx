@@ -27,18 +27,20 @@ export function AddButtons({ onFiles, onCamera, photosOnly = false }: AddButtons
   return (
     <Stack direction="column" gap={1}>
       <Button
-        variant="primary"
+        variant="secondary"
+        block
         data-testid="add-photo"
         onclick={() => pick({ accept: 'image/*', multiple: true }, onFiles)}
       >
         Add photo
       </Button>
-      <Button variant="secondary" data-testid="camera" onclick={() => onCamera()}>
+      <Button variant="secondary" block data-testid="camera" onclick={() => onCamera()}>
         Camera
       </Button>
       {photosOnly ? null : (
         <Button
           variant="secondary"
+          block
           data-testid="add-file"
           onclick={() => pick({ multiple: true }, onFiles)}
         >

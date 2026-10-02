@@ -60,6 +60,19 @@ function fakeConnection(): FakeConnection {
 
 const anyAccept = (): Promise<'any'> => Promise.resolve('any')
 
+/** The visible text of `testId`, without the scoped `<style>` a component renders inside itself. */
+function text(testId: string): string | undefined {
+  const el = host.querySelector(`[data-testid="${testId}"]`)
+  if (!el) return undefined
+  const copy = el.cloneNode(true) as Element
+  for (const style of copy.querySelectorAll('style')) style.remove()
+  return copy.textContent?.trim()
+}
+
+function status(): string | undefined {
+  return text('inject-status')
+}
+
 function doneButton(): HTMLButtonElement {
   const button = host.querySelector<HTMLButtonElement>('[data-testid="done"]')
   if (!button) throw new Error('no done button')
@@ -111,7 +124,7 @@ test('picked files upload once connected, and a dropped link redials', async () 
     host,
   )
   await settle()
-  expect(host.textContent).toContain('connected (relay)')
+  expect(status()).toBe('connected')
 
   host.querySelector<HTMLElement>('[data-testid="add-file"]')?.click()
   const input = document.querySelector<HTMLInputElement>('input[type=file]')
@@ -159,7 +172,7 @@ test('Done waits for uploads, finishes the session, and stops redialling', async
     host,
   )
   await settle()
-  expect(doneButton().disabled).toBe(false)
+  expect(doneButton().disabled).toBe(true)
 
   pick(['a.txt'])
   await settle()
@@ -200,4 +213,41 @@ test('a photos-only ticket hides the file picker, also before the mode is known'
   await settle()
   expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
   expect(host.querySelector('[data-testid="add-photo"]')).not.toBeNull()
+})
+
+test('the header names the app on the left and the link state on the right', async () => {
+  root = render(
+    InjectSession({
+      ticket: '3xYz',
+      readAccept: anyAccept,
+      connect: () => Promise.resolve(fakeConnection()),
+    }),
+    host,
+  )
+  expect(status()).toBe('connecting…')
+  await settle()
+  expect(text('inject-brand')).toBe('agent-inject 💉')
+  // Which path carries the bytes is a debugging detail; it lives on the title.
+  expect(status()).toBe('connected')
+  expect(host.querySelector('[data-testid="inject-status"]')?.getAttribute('title')).toBe('over relay')
+})
+
+test('Done starts disabled and turns primary once a file is saved', async () => {
+  root = render(
+    InjectSession({
+      ticket: '3xYz',
+      readAccept: anyAccept,
+      connect: () => Promise.resolve(fakeConnection()),
+    }),
+    host,
+  )
+  await settle()
+  expect(doneButton().disabled).toBe(true)
+  expect(doneButton().dataset['variant']).not.toBe('primary')
+  expect(doneButton().dataset['block']).toBe('true')
+
+  pick(['a.jpg'])
+  await settle()
+  expect(doneButton().disabled).toBe(false)
+  expect(doneButton().dataset['variant']).toBe('primary')
 })
