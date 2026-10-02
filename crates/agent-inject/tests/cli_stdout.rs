@@ -138,3 +138,47 @@ async fn accept_images_puts_the_mode_in_the_ticket_and_refuses_other_files() {
     child.wait().unwrap();
     assert_eq!(response.status, Status::NotAccepted);
 }
+
+#[tokio::test]
+async fn with_no_dir_a_session_saves_into_a_fresh_folder_under_agent_inject_dir() {
+    let base = tempfile::tempdir().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agent-inject"))
+        .args(["--loopback", "--output", "json"])
+        .env("AGENT_INJECT_DIR", base.path())
+        .env("AGENT_INJECT_WEB_ORIGIN", "https://example.test")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn agent-inject");
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let start = line(&mut stdout);
+    let dir = std::path::PathBuf::from(
+        start["dir"]
+            .as_str()
+            .unwrap_or_else(|| panic!("no dir: {start}")),
+    );
+    let base = base.path().canonicalize().unwrap();
+    assert_eq!(dir.parent(), Some(base.as_path()), "{}", dir.display());
+
+    let ticket =
+        InjectTicket::decode(start["url"].as_str().unwrap().rsplit('/').next().unwrap()).unwrap();
+    let endpoint = loopback_sender().await.unwrap();
+    let conn = endpoint
+        .connect(ticket.addr.clone(), UPLOAD_ALPN)
+        .await
+        .unwrap();
+    let header = RequestHeader {
+        secret: ticket.secret,
+        upload_id: [1; 16],
+        name: "a.jpg".to_owned(),
+        size: 3,
+    };
+    assert_eq!(
+        upload(&conn, &header, b"abc").await.unwrap().status,
+        Status::Ok
+    );
+    let saved = line(&mut stdout)["path"].as_str().unwrap().to_owned();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert_eq!(std::path::Path::new(&saved), dir.join("a.jpg"));
+}

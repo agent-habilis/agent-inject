@@ -8,8 +8,9 @@
  * 3. Publishes the proxy with `tailscale serve` at
  *    `https://<this machine>:8443`. The page needs HTTPS, or the phone refuses
  *    the live camera.
- * 4. Runs `agent-inject <dir>` with that origin, so its link and QR code open
- *    the page on the phone.
+ * 4. Runs `agent-inject [dir]` with that origin, so its link and QR code open
+ *    the page on the phone. With no `dir`, it saves into a fresh
+ *    `/tmp/agent-inject/<session-id>/`.
  *
  * ctrl-c stops all three and removes the `tailscale serve` entry.
  *
@@ -21,7 +22,6 @@ import { $ } from 'bun'
 
 const HTTPS_PORT = 8443
 const DEV_PORT = Number(process.env.DEV_PORT ?? 3000)
-const DEFAULT_DIR = '/tmp/agent-inject-inbox'
 const REPO_ROOT = new URL('../', import.meta.url).pathname
 
 type StatusResult = { dns: string } | { error: string }
@@ -158,7 +158,8 @@ async function waitForDevServer(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const dir = process.argv[2] ?? DEFAULT_DIR
+  // No dir: agent-inject picks its own session folder.
+  const dirArg = process.argv.slice(2, 3)
   const tailscale = await tailscaleBinary()
 
   const status = parseStatus(await $`${tailscale} status --json`.nothrow().quiet().json().catch(() => null))
@@ -209,7 +210,7 @@ async function main(): Promise<void> {
   published = true
   console.log(`dev:phone: web app at ${origin}/app (tailnet only)`)
 
-  session = Bun.spawn(['cargo', 'run', '-q', '-p', 'agent-inject', '--', dir], {
+  session = Bun.spawn(['cargo', 'run', '-q', '-p', 'agent-inject', '--', ...dirArg], {
     cwd: REPO_ROOT,
     env: { ...process.env, AGENT_INJECT_WEB_ORIGIN: origin },
     stdio: ['inherit', 'inherit', 'inherit'],

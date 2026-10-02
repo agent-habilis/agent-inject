@@ -11,6 +11,7 @@ pub(crate) mod plug;
 pub(crate) mod qr;
 pub(crate) mod receive;
 pub(crate) mod serve;
+pub(crate) mod session_dir;
 pub(crate) mod util;
 pub(crate) mod web;
 pub(crate) mod webrtc;
