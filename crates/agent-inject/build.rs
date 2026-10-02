@@ -10,8 +10,13 @@ const SKIP: &[&str] = include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/embed_s
 
 fn main() {
     let mut hasher = DefaultHasher::new();
-    println!("cargo:rerun-if-changed=skills");
-    hash_dir(Path::new("skills"), &mut hasher);
+    // `skills/` sits at the workspace root, two levels above this package.
+    // Read at script runtime, not via `env!`, so a moved checkout does not keep
+    // hashing the old location.
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+    let skills = Path::new(&manifest_dir).join("../../skills");
+    println!("cargo:rerun-if-changed={}", skills.display());
+    hash_dir(&skills, &mut hasher);
     println!(
         "cargo:rustc-env=AGENT_INJECT_EMBED_FINGERPRINT={:016x}",
         hasher.finish()

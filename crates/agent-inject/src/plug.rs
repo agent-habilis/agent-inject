@@ -9,7 +9,7 @@ use include_dir::{Dir, include_dir};
 
 use crate::util::output;
 
-static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/skills");
+static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../skills");
 
 /// The only folders `plug` and `unplug` create or delete under an agent's
 /// skills root, so the skills of other tools there stay untouched. A test
