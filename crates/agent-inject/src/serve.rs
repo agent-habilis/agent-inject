@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_inject_proto::lookup::LookupOpts;
-use agent_inject_proto::{InjectTicket, SECRET_LEN, UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN};
+use agent_inject_proto::{Accept, InjectTicket, SECRET_LEN, UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN};
 use anyhow::{Context, Result, bail};
 use fofoca::iroh::protocol::Router;
 use fofoca::iroh::{EndpointAddr, SecretKey};
@@ -90,6 +90,7 @@ pub async fn serve_with(opts: ServeOpts) -> Result<Session> {
         addr,
         secret,
         lookups: opts.lookups,
+        accept: Accept::Any,
     };
     let dir = opts
         .dir

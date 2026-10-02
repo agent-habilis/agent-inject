@@ -75,7 +75,8 @@ pub(crate) async fn send(
         | Status::BadName
         | Status::Truncated
         | Status::Io
-        | Status::TooLarge) => Err(JsValue::from_str(&format!(
+        | Status::TooLarge
+        | Status::NotAccepted) => Err(JsValue::from_str(&format!(
             "{}: {}",
             status.label(),
             response.message

@@ -197,6 +197,7 @@ pub enum Status {
     Truncated,
     Io,
     TooLarge,
+    NotAccepted,
 }
 
 impl Status {
@@ -209,6 +210,7 @@ impl Status {
             Status::Truncated => 3,
             Status::Io => 4,
             Status::TooLarge => 5,
+            Status::NotAccepted => 6,
         }
     }
 
@@ -222,6 +224,7 @@ impl Status {
             3 => Status::Truncated,
             4 => Status::Io,
             5 => Status::TooLarge,
+            6 => Status::NotAccepted,
             other => bail!("unknown upload status: {other}"),
         })
     }
@@ -236,6 +239,7 @@ impl Status {
             Status::Truncated => "truncated",
             Status::Io => "io",
             Status::TooLarge => "too_large",
+            Status::NotAccepted => "not_accepted",
         }
     }
 }
@@ -403,11 +407,12 @@ mod tests {
             (Status::Truncated, 3),
             (Status::Io, 4),
             (Status::TooLarge, 5),
+            (Status::NotAccepted, 6),
         ] {
             assert_eq!(status.to_byte(), byte);
             assert_eq!(Status::from_byte(byte).unwrap(), status);
         }
-        assert!(Status::from_byte(6).is_err());
+        assert!(Status::from_byte(7).is_err());
     }
 
     #[test]
