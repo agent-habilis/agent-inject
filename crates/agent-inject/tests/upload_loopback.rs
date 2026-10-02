@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use agent_inject::test_support::{ServeOpts, Session, finish, loopback_sender, serve_with, upload};
 use agent_inject_proto::lookup::LookupOpts;
-use agent_inject_proto::{RequestHeader, Status, UPLOAD_ALPN};
+use agent_inject_proto::{Accept, RequestHeader, Status, UPLOAD_ALPN};
 use fofoca::iroh::Endpoint;
 use fofoca::iroh::endpoint::Connection;
 use fofoca_iroh_webrtc_transport::IceConfig;
@@ -16,6 +16,7 @@ async fn session(dir: &Path) -> Session {
     serve_with(ServeOpts {
         dir: dir.to_owned(),
         lookups: LookupOpts::loopback(),
+        accept: Accept::Any,
         ice: IceConfig::host_only(),
     })
     .await

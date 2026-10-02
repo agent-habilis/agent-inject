@@ -23,6 +23,7 @@ pub struct ServeOpts {
     /// Existing directory the files are written into.
     pub dir: PathBuf,
     pub lookups: LookupOpts,
+    pub accept: Accept,
     /// Tests pass `IceConfig::host_only()`; the default asks public STUN.
     pub ice: IceConfig,
 }
@@ -90,13 +91,13 @@ pub async fn serve_with(opts: ServeOpts) -> Result<Session> {
         addr,
         secret,
         lookups: opts.lookups,
-        accept: Accept::Any,
+        accept: opts.accept,
     };
     let dir = opts
         .dir
         .canonicalize()
         .with_context(|| format!("resolve {}", opts.dir.display()))?;
-    let ctx = Arc::new(ReceiveCtx::new(dir.clone(), secret, None));
+    let ctx = Arc::new(ReceiveCtx::new(dir.clone(), secret, None, opts.accept));
     let (tx, saved) = unbounded_channel();
     let done = Arc::new(Notify::new());
     let router = Router::builder(endpoint.clone())
