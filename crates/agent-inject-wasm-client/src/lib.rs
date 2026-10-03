@@ -511,5 +511,13 @@ mod tests {
             InjectClient::parse_ticket(&ticket.encode()).unwrap(),
             "images"
         );
+        let files = agent_inject_proto::InjectTicket {
+            accept: agent_inject_proto::Accept::Files,
+            ..ticket
+        };
+        assert_eq!(
+            InjectClient::parse_ticket(&files.encode()).unwrap(),
+            "files"
+        );
     }
 }

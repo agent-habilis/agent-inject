@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { flushSync, render } from 'visage-dom'
 import type { Root } from 'visage-dom'
 
+import type { Accept } from '../../lib/client/index.ts'
 import { AddButtons } from './index.tsx'
 
 let host: HTMLElement
@@ -28,8 +29,8 @@ afterEach(() => {
   root = null
 })
 
-function mount(onCamera = (): void => {}, photosOnly = false): void {
-  root = render(AddButtons({ onFiles: () => {}, onCamera, photosOnly }), host)
+function mount(onCamera = (): void => {}, mode: Accept = 'any'): void {
+  root = render(AddButtons({ onFiles: () => {}, onCamera, mode }), host)
   flushSync()
 }
 
@@ -68,10 +69,21 @@ test('Camera hands off to the camera sheet', () => {
 })
 
 test('a photos-only session has no file picker', () => {
-  mount(undefined, true)
+  mount(undefined, 'images')
   expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
   expect(button('add-photo')).toBeTruthy()
   expect(button('camera')).toBeTruthy()
+})
+
+test('a files session has only Add files, for any file', () => {
+  mount(undefined, 'files')
+  expect(host.querySelector('[data-testid="add-photo"]')).toBeNull()
+  expect(host.querySelector('[data-testid="camera"]')).toBeNull()
+  expect(button('add-file').textContent).toContain('Add files')
+  button('add-file').click()
+  expect(clicked).toHaveLength(1)
+  expect(clicked[0]?.accept).toBe('')
+  expect(clicked[0]?.multiple).toBe(true)
 })
 
 test('Add photo and Camera share one look, so Done is the only call to action', () => {

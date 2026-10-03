@@ -215,6 +215,29 @@ test('a photos-only ticket hides the file picker, also before the mode is known'
   expect(host.querySelector('[data-testid="add-photo"]')).not.toBeNull()
 })
 
+test('a files ticket shows only Add files, also before the mode is known', async () => {
+  let known: (accept: 'files') => void = () => {}
+  root = render(
+    InjectSession({
+      ticket: '3xYz',
+      readAccept: () =>
+        new Promise((resolve) => {
+          known = resolve
+        }),
+      connect: () => Promise.resolve(fakeConnection()),
+    }),
+    host,
+  )
+  await settle()
+  expect(host.querySelector('[data-testid="add-photo"]')).toBeNull()
+  expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
+  known('files')
+  await settle()
+  expect(host.querySelector('[data-testid="add-photo"]')).toBeNull()
+  expect(host.querySelector('[data-testid="camera"]')).toBeNull()
+  expect(host.querySelector('[data-testid="add-file"]')).not.toBeNull()
+})
+
 test('the header names the app on the left and the link state on the right', async () => {
   root = render(
     InjectSession({

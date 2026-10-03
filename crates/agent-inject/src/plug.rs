@@ -14,7 +14,7 @@ static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../skills");
 /// The only folders `plug` and `unplug` create or delete under an agent's
 /// skills root, so the skills of other tools there stay untouched. A test
 /// keeps this in step with `skills/`.
-const OWNED_SKILLS: &[&str] = &["inject-photo"];
+const OWNED_SKILLS: &[&str] = &["inject-files", "inject-photo"];
 
 // Ties this module to the content of `skills/` (see `build.rs`).
 const _: &str = env!("AGENT_INJECT_EMBED_FINGERPRINT");
@@ -235,8 +235,12 @@ mod tests {
         let skill = std::fs::read_to_string(skills.join("inject-photo/SKILL.md")).unwrap();
         assert!(skill.starts_with("---\nname: inject-photo\n"), "{skill}");
 
+        let files = std::fs::read_to_string(skills.join("inject-files/SKILL.md")).unwrap();
+        assert!(files.starts_with("---\nname: inject-files\n"), "{files}");
+
         assert!(remove(Agent::ClaudeCode, home.path()).unwrap());
         assert!(!skills.join("inject-photo").exists());
+        assert!(!skills.join("inject-files").exists());
         assert!(skills.join("someone-else").exists());
     }
 

@@ -54,7 +54,7 @@ stays out of the result.
 |---|---|
 | `--output human\|json` | Output format. Default: `human`. |
 | `--no-qr` | Do not print the QR code. |
-| `--accept any\|images` | What the phone can send. `images` removes **Add file** from the page, and the command refuses other files. Default: `any`. |
+| `--accept any\|images\|files` | What the phone can send. `images` removes **Add file** from the page, and the command refuses other files. `files` shows only **Add files** and **Done**, with no photo picker and no camera. Default: `any`. |
 
 The link opens `https://inject.agent-habilis.com`. `AGENT_INJECT_WEB_ORIGIN`
 sets another origin, for a dev server or a tunnel.
@@ -73,6 +73,9 @@ agent-inject unplug   # remove them
   starts `agent-inject --accept images` in the background and shows the link
   and the QR code. When you press **Done**, the command stops and the agent
   gets the paths of the photos.
+- `/inject-files` receives files of any type. The agent starts
+  `agent-inject --accept files`. The phone page shows only **Add files** and
+  **Done**, and the agent gets the paths of the files.
 
 To try a skill against a local page, run `bun run dev:phone`, and set
 `AGENT_INJECT_WEB_ORIGIN=https://<this machine>:8443` in the shell that starts

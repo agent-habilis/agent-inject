@@ -34,6 +34,7 @@ pub(crate) enum AcceptArg {
     #[default]
     Any,
     Images,
+    Files,
 }
 
 /// Receive photos and files from a phone into a directory.
@@ -55,7 +56,7 @@ pub(crate) struct Cli {
     #[arg(long, value_enum, default_value_t)]
     output: OutputFormat,
     /// What the phone may send. `images` hides the file picker and refuses
-    /// other files.
+    /// other files. `files` shows only **Add files**.
     #[arg(long, value_enum, default_value_t)]
     accept: AcceptArg,
     /// Do not print the QR code.
@@ -107,6 +108,7 @@ pub(crate) async fn run(cli: Cli) -> Result<()> {
         accept: match cli.accept {
             AcceptArg::Any => Accept::Any,
             AcceptArg::Images => Accept::Images,
+            AcceptArg::Files => Accept::Files,
         },
         ice: IceConfig::default(),
     })
