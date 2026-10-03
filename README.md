@@ -90,6 +90,7 @@ Prerequisites: Rust (the toolchain in `rust-toolchain.toml`), the
 ```sh
 cargo task ci         # the full gate: names, fmt, clippy, tests, web, wasm
 cargo task web-wasm   # build the browser client into packages/agent-inject-wasm
+cargo task publish-web-image   # build the web app image (linux/arm64) and push it to the Gitea registry
 bun run dev           # web app with hot reload on :3000/app (next free port up to :3009)
 bun run build         # production bundle into dist/
 bun run start         # serve dist/
@@ -103,6 +104,24 @@ AGENT_INJECT_WEB_ORIGIN=http://localhost:3417 cargo run -- /tmp/inbox
 ```
 
 The camera needs a secure context. `localhost` is one. A phone needs HTTPS.
+
+### Deploy the web app
+
+`cargo task publish-web-image` builds the web app as a container image and
+pushes it to a container registry, tagged with the short commit sha (`-dirty`
+when the image inputs have uncommitted changes) and `latest`. The build is
+hermetic: the `Dockerfile` rebuilds the wasm from source. It needs a running
+Docker daemon, and a `docker login` to the registry.
+
+```sh
+export AGENT_INJECT_REGISTRY=registry.example.com        # or pass --registry
+export AGENT_INJECT_REGISTRY_OWNER=my-org                # or pass --owner
+cargo task publish-web-image                             # --no-push builds only
+```
+
+`--platform` picks `linux/arm64` (the default) or `linux/amd64`. On the host,
+copy `deploy/compose.example.yaml`, set the image to the one you pushed, and run
+`docker compose up -d`. The file explains the loopback port and the TLS step.
 
 ### Test on your phone
 

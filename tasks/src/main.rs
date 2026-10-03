@@ -8,6 +8,7 @@ mod fmt;
 mod install;
 mod lint;
 mod naming;
+mod publish_web_image;
 mod run;
 mod test;
 mod util;
@@ -47,6 +48,31 @@ enum Task {
     Naming,
     /// Build the browser wasm client into `packages/agent-inject-wasm`.
     WebWasm,
+    /// Build the web app into a container image (Bun serving the static
+    /// `dist/`) and push it to a container registry. Hermetic: the
+    /// image rebuilds the wasm from source, so nothing on this machine leaks
+    /// into it and no `web-wasm` run is needed first.
+    PublishWebImage {
+        /// Image tag. Defaults to the short commit sha, marked `-dirty` when
+        /// the tree has uncommitted changes. `latest` is always tagged and
+        /// pushed alongside it.
+        #[arg(long)]
+        tag: Option<String>,
+        /// Registry host, e.g. `registry.example.com`. Log in first with
+        /// `docker login <registry>`.
+        #[arg(long, env = "AGENT_INJECT_REGISTRY")]
+        registry: String,
+        /// User or org that owns the package in the registry.
+        #[arg(long, env = "AGENT_INJECT_REGISTRY_OWNER")]
+        owner: String,
+        /// Build only: skip both pushes.
+        #[arg(long)]
+        no_push: bool,
+        /// Target platform. The default builds natively on Apple Silicon;
+        /// building the other one there pulls in qemu and gets slow.
+        #[arg(long, default_value = "linux/arm64")]
+        platform: publish_web_image::Platform,
+    },
 }
 
 fn main() -> ExitCode {
@@ -68,6 +94,22 @@ fn main() -> ExitCode {
         Task::Lint => lint::run(&sh),
         Task::Naming => naming::run(&sh),
         Task::WebWasm => web_wasm::run(&sh),
+        Task::PublishWebImage {
+            tag,
+            registry,
+            owner,
+            no_push,
+            platform,
+        } => publish_web_image::run(
+            &sh,
+            &publish_web_image::Options {
+                tag,
+                registry,
+                owner,
+                no_push,
+                platform,
+            },
+        ),
     };
 
     match outcome {
