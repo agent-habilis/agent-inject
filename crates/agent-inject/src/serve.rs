@@ -7,9 +7,9 @@ use std::sync::Arc;
 use agent_inject_proto::lookup::LookupOpts;
 use agent_inject_proto::{Accept, InjectTicket, SECRET_LEN, UPLOAD_ALPN, WEBRTC_SIGNAL_ALPN};
 use anyhow::{Context, Result, bail};
-use fofoca::iroh::protocol::Router;
-use fofoca::iroh::{EndpointAddr, SecretKey};
-use fofoca_iroh_webrtc_transport::{IceConfig, WebRtcHandle, WebRtcTransport};
+use habilis_network::iroh::protocol::Router;
+use habilis_network::iroh::{EndpointAddr, SecretKey};
+use habilis_network_iroh_webrtc_transport::{IceConfig, WebRtcHandle, WebRtcTransport};
 use tokio::sync::Notify;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 

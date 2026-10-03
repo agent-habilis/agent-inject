@@ -1,15 +1,15 @@
-//! Build the receiver's iroh endpoint. Trimmed from agent-share's lookup
-//! layer: inject only needs the relay (for the browser to reach us and to
-//! carry the WebRTC signalling), so no mDNS or DHT lookup is wired.
+//! Build the receiver's iroh endpoint. Inject only needs the relay (for the
+//! browser to reach us and to carry the WebRTC signalling), so no mDNS or DHT
+//! lookup is wired.
 
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::Duration;
 
 use agent_inject_proto::lookup::{LookupOpts, RelayChoice};
 use anyhow::{Context, Result, bail};
-use fofoca::iroh::endpoint::{PortmapperConfig, presets};
-use fofoca::iroh::{Endpoint, RelayMode, SecretKey};
-use fofoca_iroh_webrtc_transport::WebRtcHandle;
+use habilis_network::iroh::endpoint::{PortmapperConfig, presets};
+use habilis_network::iroh::{Endpoint, RelayMode, SecretKey};
+use habilis_network_iroh_webrtc_transport::WebRtcHandle;
 
 /// Build an endpoint pinned to `key`.
 ///
@@ -56,11 +56,11 @@ fn relay_mode(choice: &RelayChoice) -> RelayMode {
 }
 
 /// The `Pinned` ladder: the agent-habilis relay first, n0's as fallback.
-/// Sourced from fofoca, so the CLI and the browser resolve "pinned" to the
+/// Sourced from habilis-network, so the CLI and the browser resolve "pinned" to the
 /// same rungs; two copies that drifted would put the peers on different
 /// relays with nothing to say why they never met.
-pub(crate) fn pinned_ladder() -> Vec<fofoca::iroh::RelayUrl> {
-    fofoca::net::relay_ladder(&fofoca::protocol::RelayChoice::Pinned)
+pub(crate) fn pinned_ladder() -> Vec<habilis_network::iroh::RelayUrl> {
+    habilis_network::net::relay_ladder(&habilis_network::protocol::RelayChoice::Pinned)
 }
 
 /// Best-effort wait (≤5s) for the endpoint to reach its home relay, so the
@@ -72,7 +72,7 @@ pub(crate) async fn wait_online(endpoint: &Endpoint) {
 #[cfg(test)]
 mod tests {
     use agent_inject_proto::lookup::{LookupOpts, RelayChoice};
-    use fofoca::iroh::SecretKey;
+    use habilis_network::iroh::SecretKey;
 
     use super::{build_endpoint, pinned_ladder, relay_mode};
 

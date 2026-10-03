@@ -26,7 +26,7 @@ export interface Overrides {
 }
 
 /**
- * Read the debugging overrides from the query string, in fofoca's words:
+ * Read the debugging overrides from the query string, in habilis-network's words:
  *
  * - `?transport=webrtc,relay` — what may carry uploads. Default both, WebRTC
  *   first. A browser has no UDP.

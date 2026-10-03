@@ -177,9 +177,8 @@ An option that is not valid stops the page with the reason.
 | `packages/visage-*`, `packages/moonspace*` | Vendored UI kit. See `docs/vendoring.md`. |
 | `tasks/` | `cargo task`. |
 
-The transport comes from [agent-share](https://github.com/agent-habilis/agent-share):
-iroh QUIC over a WebRTC data channel, through
-[fofoca](https://github.com/fofoca-network/fofoca).
+The transport is iroh QUIC over a WebRTC data channel, through
+[habilis-network](https://github.com/agent-habilis/habilis-network).
 
 ## License
 

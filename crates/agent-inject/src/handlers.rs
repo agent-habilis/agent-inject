@@ -7,10 +7,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_inject_proto::{CLOSE_UNAUTHORIZED, Status};
-use fofoca::iroh::EndpointId;
-use fofoca::iroh::endpoint::Connection;
-use fofoca::iroh::protocol::{AcceptError, ProtocolHandler};
-use fofoca_iroh_webrtc_transport::{IceConfig, WebRtcHandle};
+use habilis_network::iroh::EndpointId;
+use habilis_network::iroh::endpoint::Connection;
+use habilis_network::iroh::protocol::{AcceptError, ProtocolHandler};
+use habilis_network_iroh_webrtc_transport::{IceConfig, WebRtcHandle};
 use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedSender;
 

@@ -2,7 +2,7 @@
 //! in one string.
 
 use anyhow::{Context, Result, bail};
-use fofoca_protocol::iroh_base::EndpointAddr;
+use habilis_network_protocol::iroh_base::EndpointAddr;
 
 use crate::framing::SECRET_LEN;
 use crate::lookup::LookupOpts;
@@ -131,7 +131,7 @@ impl InjectTicket {
 
 #[cfg(test)]
 mod tests {
-    use fofoca_protocol::iroh_base::{EndpointAddr, SecretKey};
+    use habilis_network_protocol::iroh_base::{EndpointAddr, SecretKey};
 
     use super::{Accept, InjectTicket};
     use crate::lookup::{LookupOpts, RelayChoice};

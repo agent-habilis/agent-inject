@@ -1,6 +1,5 @@
 /**
  * Ask for files with `<input type="file">`, the picker every browser has.
- * Adapted from agent-share's `pick-share-files`.
  */
 
 export interface PickOptions {

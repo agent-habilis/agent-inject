@@ -7,9 +7,9 @@ use std::time::Duration;
 use agent_inject::test_support::{ServeOpts, Session, finish, loopback_sender, serve_with, upload};
 use agent_inject_proto::lookup::LookupOpts;
 use agent_inject_proto::{Accept, RequestHeader, Status, UPLOAD_ALPN};
-use fofoca::iroh::Endpoint;
-use fofoca::iroh::endpoint::Connection;
-use fofoca_iroh_webrtc_transport::IceConfig;
+use habilis_network::iroh::Endpoint;
+use habilis_network::iroh::endpoint::Connection;
+use habilis_network_iroh_webrtc_transport::IceConfig;
 use sha2::{Digest, Sha256};
 
 async fn session(dir: &Path) -> Session {

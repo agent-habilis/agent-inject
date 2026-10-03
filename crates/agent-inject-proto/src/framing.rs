@@ -24,7 +24,7 @@
 //! then calls [`RequestHeader::decode`] on the whole header.
 
 use anyhow::{Context, Result, bail};
-use fofoca_protocol::TransportPolicy;
+use habilis_network_protocol::TransportPolicy;
 
 /// The upload protocol.
 pub const UPLOAD_ALPN: &[u8] = b"agent-inject/upload/1";
@@ -33,7 +33,7 @@ pub const UPLOAD_ALPN: &[u8] = b"agent-inject/upload/1";
 /// upload connection then runs over.
 pub const WEBRTC_SIGNAL_ALPN: &[u8] = b"agent-inject/webrtc-signal/1";
 
-/// What may carry upload bytes, in fofoca's terms. A WebRTC data channel
+/// What may carry upload bytes, in habilis-network's terms. A WebRTC data channel
 /// first; when ICE cannot open one (a phone behind carrier NAT), the relay.
 /// No UDP: the sender is a browser, which has none. How the two ends find
 /// each other is the relay lookup the ticket names.

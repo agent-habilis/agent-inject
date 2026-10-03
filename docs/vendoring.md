@@ -2,7 +2,7 @@
 
 Six of the members of `packages/` are copies of upstream libraries, not code
 written here. Nothing in the directory layout says so — they sit beside
-`agent-share-web` and the rest as equals — so this file is the list, and each
+`agent-inject-web` and the rest as equals — so this file is the list, and each
 one's `package.json` carries a `description` pointing back at it.
 
 They were copied from the two visage-ui repos on 2026-08-06 (working trees, not
@@ -40,8 +40,7 @@ Re-apply these when re-vendoring:
    live, so a route's async generator runs on into the next test; measured,
    `a revisited lazy route…` failed ~3 runs in 8 under CPU saturation and ~1
    in 8 without it. The teardown takes that to ~1 in 12, so it is an
-   improvement rather than a cure — see the feedback note in
-   `~/Notes/projects/agent-share/feedback/`.
+   improvement rather than a cure.
 8. `moonspace-dom/src/components/button/` — forked back to the boxed
    presentation the app shipped with before the re-vendor (one-row chrome:
    1ch padding + inset transparent outline, per-variant fills, lowercase
@@ -67,7 +66,7 @@ Re-apply these when re-vendoring:
   so a package whose non-test `.tsx` is bundled that way has to state those two
   options itself or compile against `react/jsx-dev-runtime` and fail to
   resolve. `moonspace-dom` is the only member in that position — the first-party
-  `.tsx` all lives in `agent-share-web`, which the bundler reaches by real path.
+  `.tsx` all lives in `agent-inject-web`, which the bundler reaches by real path.
 - Per-package `bunfig.toml` files preload `../../scripts/test-setup.ts`, which
   is `scripts/test-setup.ts` — upstream's, plus a `beforeEach` that resets the
   happy-dom URL. The whole run shares one document and `visage-router`'s link

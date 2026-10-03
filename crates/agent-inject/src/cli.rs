@@ -12,7 +12,7 @@ use agent_inject_proto::Accept;
 use agent_inject_proto::lookup::{LookupOpts, RelayChoice};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use fofoca_iroh_webrtc_transport::IceConfig;
+use habilis_network_iroh_webrtc_transport::IceConfig;
 
 use crate::plug::{self, Agent};
 use crate::serve::{ServeOpts, serve_with};

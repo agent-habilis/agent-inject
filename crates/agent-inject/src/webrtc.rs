@@ -1,6 +1,5 @@
 //! The WebRTC lane: how a browser, which has no UDP socket and cannot speak
-//! QUIC directly, reaches the receiver. Copied from agent-share's
-//! `mount/webrtc.rs`.
+//! QUIC directly, reaches the receiver.
 //!
 //! Two connections, not one, and the split is load-bearing. iroh only fans a
 //! connect's Initial out to candidate paths **while the remote has no selected
@@ -23,9 +22,9 @@
 
 use agent_inject_proto::WEBRTC_SIGNAL_ALPN;
 use anyhow::{Context, Result};
-use fofoca::iroh::endpoint::Connection;
-use fofoca::iroh::{Endpoint, EndpointAddr, EndpointId, TransportAddr};
-use fofoca_iroh_webrtc_transport::{
+use habilis_network::iroh::endpoint::Connection;
+use habilis_network::iroh::{Endpoint, EndpointAddr, EndpointId, TransportAddr};
+use habilis_network_iroh_webrtc_transport::{
     IceConfig, MAX_ENVELOPE_BYTES, NegotiatedSession, SignalEnvelope, WebRtcHandle, answer_with,
     custom_addr, offer_with,
 };
@@ -57,7 +56,7 @@ pub(crate) fn path_summary(conn: &Connection) -> Vec<String> {
             } else if matches!(
                 path.remote_addr(),
                 TransportAddr::Custom(addr)
-                    if addr.id() == fofoca_iroh_webrtc_transport::WEBRTC_TRANSPORT_ID
+                    if addr.id() == habilis_network_iroh_webrtc_transport::WEBRTC_TRANSPORT_ID
             ) {
                 "webrtc"
             } else {
@@ -118,7 +117,7 @@ pub async fn ensure_webrtc_selected(conn: &Connection, whose: &str) -> Result<()
                     && matches!(
                         path.remote_addr(),
                         TransportAddr::Custom(addr)
-                            if addr.id() == fofoca_iroh_webrtc_transport::WEBRTC_TRANSPORT_ID
+                            if addr.id() == habilis_network_iroh_webrtc_transport::WEBRTC_TRANSPORT_ID
                     )
             })
         },

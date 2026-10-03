@@ -1,10 +1,10 @@
-//! `EndpointAddr` JSON codec, embedded in the inject ticket. Same shape as
-//! agent-share's, so both tools describe a peer the same way.
+//! `EndpointAddr` JSON codec, embedded in the inject ticket. One JSON shape, so
+//! both ends describe a peer the same way.
 
 use std::net::SocketAddr;
 
 use anyhow::{Context, Result};
-use fofoca_protocol::iroh_base::{EndpointAddr, EndpointId, RelayUrl};
+use habilis_network_protocol::iroh_base::{EndpointAddr, EndpointId, RelayUrl};
 
 /// Serialize an `EndpointAddr` to a JSON value.
 #[must_use]

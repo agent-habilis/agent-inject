@@ -27,9 +27,9 @@ path = "src/main.rs"
 agent-inject-proto = { path = "../agent-inject-proto" }
 # `host` only: inject reaches the browser through the relay and the WebRTC
 # lane, so the mDNS and DHT lookups (and their dependency trees) stay out.
-fofoca = { workspace = true, features = ["host"] }
+habilis-network = { workspace = true, features = ["host"] }
 # The WebRTC lane. `native` here; the browser client takes `web`.
-fofoca-iroh-webrtc-transport = { workspace = true, features = ["native"] }
+habilis-network-iroh-webrtc-transport = { workspace = true, features = ["native"] }
 clap = { version = "4", features = ["derive"] }
 qrcode = { version = "0.14", default-features = false }
 include_dir = "0.7"

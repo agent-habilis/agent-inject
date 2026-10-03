@@ -10,7 +10,7 @@
 //! means loopback-only; any lookup means reachable across machines.
 
 use anyhow::{Context, Result, bail};
-use fofoca_protocol::iroh_base::RelayUrl;
+use habilis_network_protocol::iroh_base::RelayUrl;
 
 /// The connectivity relay. `Disabled` ⇒ no relay at all
 /// (`RelayMode::Disabled`); `Pinned` ⇒ the lookup-layer pinned default
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn flag_bytes_are_pinned_wire_format() {
-        // Interop tripwire: these bits are shared with agent-habilis/swarm.
+        // Wire tripwire: these bits must never drift.
         let mut loopback = Vec::new();
         LookupOpts::loopback().encode_into(&mut loopback);
         assert_eq!(loopback, [0b0000]);

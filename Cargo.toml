@@ -13,11 +13,11 @@ edition = "2024"
 rust-version = "1.93"
 
 [workspace.dependencies]
-# Pinned by rev to the same fofoca as agent-share, so both tools build against
-# one engine. Bump in lockstep with agent-share.
-fofoca = { git = "https://github.com/fofoca-network/fofoca", rev = "41512471077f61716c019f87f5c96d403d399967", default-features = false }
-fofoca-protocol = { git = "https://github.com/fofoca-network/fofoca", rev = "41512471077f61716c019f87f5c96d403d399967", default-features = false }
-fofoca-iroh-webrtc-transport = { git = "https://github.com/fofoca-network/fofoca", rev = "41512471077f61716c019f87f5c96d403d399967" }
+# Path dependency on the sibling habilis-network checkout, until it is pushed
+# and this can pin a git rev.
+habilis-network = { path = "../../habilis-network/main/crates/habilis-network", default-features = false }
+habilis-network-protocol = { path = "../../habilis-network/main/crates/habilis-network-protocol", default-features = false }
+habilis-network-iroh-webrtc-transport = { path = "../../habilis-network/main/crates/habilis-network-iroh-webrtc-transport" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "fs", "signal", "net", "process"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -26,8 +26,9 @@ anstyle = "1"
 anstream = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "tracing-log"] }
-# NOTE: no `iroh` entry. The iroh family is reached through `fofoca::iroh` /
-# `fofoca_protocol::iroh_base`, and fofoca owns which fork that is. Declaring
+# NOTE: no `iroh` entry. The iroh family is reached through
+# `habilis_network::iroh` / `habilis_network_protocol::iroh_base`, and
+# habilis-network owns which fork that is. Declaring
 # iroh here would put two `iroh` crates in one graph.
 bs58 = "0.5"
 sha2 = "0.10"

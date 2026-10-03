@@ -5,7 +5,7 @@
 //! phone.
 
 use agent_inject_proto::{RequestHeader, Response, SECRET_LEN, Status, UPLOAD_ID_LEN};
-use fofoca::iroh::endpoint::Connection;
+use habilis_network::iroh::endpoint::Connection;
 use js_sys::Uint8Array;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
