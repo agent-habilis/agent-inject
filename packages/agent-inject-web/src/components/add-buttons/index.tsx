@@ -7,7 +7,6 @@
  * dialog into a `NotAllowedError` in Safari.
  */
 
-import { Button, Stack } from 'moonspace-dom'
 
 import type { Accept } from '../../lib/client/index.ts'
 import { isAbort, pickFiles } from '../../lib/pick-files/index.ts'
@@ -31,41 +30,32 @@ function pick(options: Parameters<typeof pickFiles>[0], onFiles: (files: File[])
 export function AddButtons({ onFiles, onCamera, mode = 'any' }: AddButtonsProps) {
   if (mode === 'files') {
     return (
-      <Stack direction="column" gap={1}>
-        <Button
-          variant="secondary"
-          block
-          data-testid="add-file"
+      <div class="stack">
+        <button class="p-button" data-variant="secondary" data-testid="add-file"
           onclick={() => pick({ multiple: true }, onFiles)}
         >
           Add files
-        </Button>
-      </Stack>
+        </button>
+      </div>
     )
   }
   return (
-    <Stack direction="column" gap={1}>
-      <Button
-        variant="secondary"
-        block
-        data-testid="add-photo"
+    <div class="stack">
+      <button class="p-button" data-variant="secondary" data-testid="add-photo"
         onclick={() => pick({ accept: 'image/*', multiple: true }, onFiles)}
       >
         Add photo
-      </Button>
-      <Button variant="secondary" block data-testid="camera" onclick={() => onCamera()}>
+      </button>
+      <button class="p-button" data-variant="secondary" data-testid="camera" onclick={() => onCamera()}>
         Camera
-      </Button>
+      </button>
       {mode === 'images' ? null : (
-        <Button
-          variant="secondary"
-          block
-          data-testid="add-file"
+        <button class="p-button" data-variant="secondary" data-testid="add-file"
           onclick={() => pick({ multiple: true }, onFiles)}
         >
           Add file
-        </Button>
+        </button>
       )}
-    </Stack>
+    </div>
   )
 }

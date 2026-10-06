@@ -1,6 +1,6 @@
 /** One row per file: its name, its size, and where it is. */
 
-import { Button, MiddleTruncate, ProgressBar, Stack, Text } from 'moonspace-dom'
+import { FileName } from '../file-name/index.tsx'
 
 import { type Item, isRefusedForGood } from '../../lib/upload-queue/index.ts'
 
@@ -18,33 +18,36 @@ export function humanBytes(bytes: number): string {
 function status(item: Item, onRetry: (id: number) => void) {
   switch (item.status) {
     case 'queued':
-      return <Text color="fgMuted">queued</Text>
+      return <small class="muted">queued</small>
     case 'uploading':
       return (
-        <ProgressBar
-          fluid
+        <progress
           value={item.size === 0 ? 0 : item.sent / item.size}
-          label={`uploading ${item.name}`}
+          max={1}
+          aria-label={`uploading ${item.name}`}
         />
       )
     case 'saved':
       return (
-        <Text color="success">
+        <small class="success">
           {item.savedAs && item.savedAs !== item.name ? `saved as ${item.savedAs}` : 'saved'}
-        </Text>
+        </small>
       )
     case 'failed':
       return (
-        <Stack direction="row" gap={1}>
-          <Text color="danger" class="selectable">
-            {item.error ?? 'failed'}
-          </Text>
+        <div class="row">
+          <small class="danger selectable">{item.error ?? 'failed'}</small>
           {isRefusedForGood(item) ? null : (
-            <Button variant="ghost" onclick={() => onRetry(item.id)}>
+            <button
+              class="p-button"
+              data-variant="outline"
+              data-size="small"
+              onclick={() => onRetry(item.id)}
+            >
               Retry
-            </Button>
+            </button>
           )}
-        </Stack>
+        </div>
       )
   }
 }
@@ -57,18 +60,16 @@ export function UploadList({
   onRetry: (id: number) => void
 }) {
   return (
-    <Stack direction="column" gap={1} data-testid="upload-list">
+    <div class="stack" data-testid="upload-list">
       {items.map((item) => (
-        <Stack direction="column" data-testid="upload-row" data-status={item.status}>
-          <Stack direction="row" gap={1} justify="between">
-            {/* Zero basis: MiddleTruncate measures its own width, so a width
-                set by its text would shrink with each truncation. */}
-            <MiddleTruncate value={item.name} style={{ flex: '1 1 0' }} />
-            <Text color="fgMuted">{humanBytes(item.size)}</Text>
-          </Stack>
+        <div data-testid="upload-row" data-status={item.status}>
+          <div class="row">
+            <FileName value={item.name} />
+            <small class="muted">{humanBytes(item.size)}</small>
+          </div>
           {status(item, onRetry)}
-        </Stack>
+        </div>
       ))}
-    </Stack>
+    </div>
   )
 }

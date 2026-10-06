@@ -6,7 +6,6 @@
  * sheet offers the phone's own camera app instead, one shot per press.
  */
 
-import { Button, Stack, Text } from 'moonspace-dom'
 import { component, signal } from 'visage-dom'
 
 import {
@@ -89,7 +88,7 @@ export const CameraSheet = component(function* (props: CameraSheetProps) {
   }
 
   yield () => (
-    <Stack direction="column" gap={1} data-testid="camera-sheet">
+    <div class="stack" data-testid="camera-sheet">
       {mode.value === 'fallback' ? null : (
         <video
           ref={(element: HTMLVideoElement) => {
@@ -99,30 +98,30 @@ export const CameraSheet = component(function* (props: CameraSheetProps) {
             element.autoplay = true
             attach()
           }}
-          style={{ width: '100%', maxHeight: '60vh', background: 'black' }}
+          class="camera"
         />
       )}
-      {note.value ? <Text color="warning">{note.value}</Text> : null}
-      <Stack direction="row" gap={1}>
+      {note.value ? <p class="warning">{note.value}</p> : null}
+      <div class="row">
         {mode.value === 'fallback' ? (
-          <Button variant="primary" data-testid="camera-app" onclick={() => cameraApp()}>
+          <button class="p-button" data-testid="camera-app" onclick={() => cameraApp()}>
             Take photo
-          </Button>
+          </button>
         ) : (
-          <Button
-            variant="primary"
+          <button
+            class="p-button"
             data-testid="shutter"
             disabled={mode.value !== 'live'}
             onclick={() => shutter()}
           >
             Shutter
-          </Button>
+          </button>
         )}
-        <Button variant="secondary" data-testid="camera-done" onclick={() => props.onClose()}>
+        <button class="p-button" data-variant="secondary" data-testid="camera-done" onclick={() => props.onClose()}>
           Done
-        </Button>
-        <Text color="fgMuted">{shots.value === 1 ? '1 photo' : `${shots.value} photos`}</Text>
-      </Stack>
-    </Stack>
+        </button>
+        <small class="muted">{shots.value === 1 ? '1 photo' : `${shots.value} photos`}</small>
+      </div>
+    </div>
   )
 })

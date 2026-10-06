@@ -1,13 +1,138 @@
+/* App layout on top of Primitive. Colour and type come from its tokens. */
+
 html body {
-  background: var(--bg);
   min-height: 100vh;
   min-height: 100dvh;
 }
 
-#root {
-  margin: 0;
-  min-height: 100vh;
-  min-height: 100dvh;
+/* The page body: padded, capped, centred. */
+.page {
+  max-width: 72ch;
+  margin: 0 auto;
+}
+
+/* A vertical run of blocks with one baseline between them. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--baseline);
+}
+
+.stack > * {
+  margin-bottom: 0;
+}
+
+.row {
+  display: flex;
+  gap: var(--baseline);
+  align-items: center;
+}
+
+/* The button column: narrower than the page, centred in it. */
+.buttons {
+  width: 100%;
+  max-width: 32ch;
+  margin: 0 auto;
+}
+
+.buttons .p-button {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+/*
+ * Fills what is left of the viewport under the header (3 lines tall) and
+ * centres its content in both directions. The bottom margin takes back the
+ * body's bottom padding, so the page does not scroll.
+ */
+div.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: calc(100dvh - 3 * var(--lineHeight));
+  margin-top: calc(-1 * var(--lineHeight));
+  margin-bottom: calc(-1 * (var(--pageMargin) + var(--lineHeight)));
+}
+
+.notice {
+  max-width: 60ch;
+}
+
+.boxed {
+  box-shadow: inset 0 0 0 1px var(--rule-color);
+  padding: var(--baseline);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lineHeight);
+  padding: var(--lineHeight) var(--pageMargin);
+  margin: calc(var(--pageMargin) * -1) calc(var(--pageMargin) * -1) var(--lineHeight);
+  background: var(--field-background);
+}
+
+/* Never shrinks, so the name never breaks at its hyphen. */
+.bar > strong {
+  flex-shrink: 0;
+}
+
+/* min-width 0 lets a long status truncate instead of pushing the name off. */
+.bar > div {
+  min-width: 0;
+}
+
+.truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--muted-color);
+}
+
+.success {
+  color: var(--ts-green);
+}
+
+.warning {
+  color: var(--ts-yellow);
+}
+
+.danger {
+  color: var(--ts-red);
+}
+
+.camera {
+  width: 100%;
+  max-height: 60vh;
+  background: black;
+}
+
+/*
+ * A file name that keeps its extension: the stem takes the ellipsis, the
+ * extension stays whole.
+ */
+.file-name {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.file-name > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-name > :last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Opt-in text selection, for text that is the payload: an error to report. */
