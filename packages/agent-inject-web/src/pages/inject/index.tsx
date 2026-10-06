@@ -7,7 +7,6 @@
  * failed back in line.
  */
 
-import { Box, Button, Stack, Text } from 'moonspace-dom'
 import { component, signal } from 'visage-dom'
 import { useParams } from 'visage-router'
 
@@ -27,9 +26,6 @@ import {
 } from '../../lib/client/index.ts'
 import { looksLikeTicket } from '../../lib/ticket/index.ts'
 import { type Item, UploadQueue, isIdle } from '../../lib/upload-queue/index.ts'
-
-/** The button column: narrower than the page, centred in it. */
-const BUTTONS = { width: '100%', maxWidth: '32ch', margin: '0 auto' }
 
 /** Dials in a row that may fail before the page gives up and asks. */
 const MAX_FAILED_DIALS = 4
@@ -164,10 +160,10 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
 
   function statusLine() {
     const current = phase.value
-    let status: { color: 'fgMuted' | 'success' | 'warning'; label: string; title?: string; selectable?: boolean }
+    let status: { color: 'muted' | 'success' | 'warning'; label: string; title?: string; selectable?: boolean }
     switch (current.kind) {
       case 'connecting':
-        status = { color: 'fgMuted', label: 'connecting…' }
+        status = { color: 'muted', label: 'connecting…' }
         break
       case 'connected':
         // Which path carries the bytes is a debugging detail, so it is a tooltip.
@@ -183,27 +179,25 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
         }
         break
       case 'finishing':
-        status = { color: 'fgMuted', label: 'finishing…' }
+        status = { color: 'muted', label: 'finishing…' }
         break
       case 'failed':
         return (
-          <Button variant="ghost" onclick={() => start()}>
+          <button class="p-button" data-variant="outline" data-size="small" onclick={() => start()}>
             Reconnect
-          </Button>
+          </button>
         )
       case 'finished':
         return null
     }
     return (
-      <Text
-        color={status.color}
-        truncate
-        class={status.selectable ? 'selectable' : undefined}
+      <span
+        class={`truncate ${status.color}${status.selectable ? ' selectable' : ''}`}
         data-testid="inject-status"
         title={status.title}
       >
         {status.label}
-      </Text>
+      </span>
     )
   }
 
@@ -213,26 +207,30 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
     const current = phase.value
     if (current.kind === 'finished') {
       return (
-        <Centered>
-          <Stack direction="column" gap={1} data-testid="inject-finished">
-            <Text weight="bold" color="success">
-              Finished — {current.count === 1 ? '1 file' : `${current.count} files`} sent.
-            </Text>
-            <Text color="fgMuted">You can close this page.</Text>
-          </Stack>
-        </Centered>
+        <div>
+          <Header trailing={null} />
+          <Centered>
+            <div class="stack" data-testid="inject-finished">
+              <strong class="success">Finished</strong>
+              <p class="muted">{current.count === 1 ? '1 file' : `${current.count} files`} sent</p>
+            </div>
+          </Centered>
+        </div>
       )
     }
     if (current.kind === 'failed' && items.value.length === 0) {
       return (
-        <Stack direction="column" gap={1} data-testid="inject-failed">
-          <FailedBody title="Could not reach agent-inject" reason={current.reason} />
-          {looksLikeTicket(ticket) ? (
-            <Button variant="secondary" onclick={() => start()}>
-              Try again
-            </Button>
-          ) : null}
-        </Stack>
+        <div>
+          <Header trailing={null} />
+          <div class="stack" data-testid="inject-failed">
+            <FailedBody title="Could not reach agent-inject" reason={current.reason} />
+            {looksLikeTicket(ticket) ? (
+              <button class="p-button" data-variant="secondary" onclick={() => start()}>
+                Try again
+              </button>
+            ) : null}
+          </div>
+        </div>
       )
     }
     // Done means "I sent what I meant to", so it waits for a file to land.
@@ -243,19 +241,19 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
     return (
       <div>
         <Header trailing={statusLine()} />
-        <div style={{ padding: '1em 2ch', maxWidth: '72ch', margin: '0 auto' }}>
-          <Stack direction="column" gap={1} data-testid="inject-page">
+        <div class="page">
+          <div class="stack" data-testid="inject-page">
             {cameraOpen.value ? (
-              <Box border="line" padX={1} padY={1}>
+              <div class="boxed">
                 <CameraSheet
                   onShot={(file: File) => add([file])}
                   onClose={() => {
                     cameraOpen.value = false
                   }}
                 />
-              </Box>
+              </div>
             ) : (
-              <div style={BUTTONS}>
+              <div class="buttons">
                 {accept.value === null ? null : (
                   <AddButtons
                     mode={accept.value}
@@ -267,19 +265,19 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
                 )}
               </div>
             )}
-            <div style={BUTTONS}>
-              <Button
-                variant={canFinish ? 'primary' : 'secondary'}
-                block
+            <div class="buttons">
+              <button
+                class="p-button"
+                data-variant={canFinish ? undefined : 'secondary'}
                 data-testid="done"
                 disabled={!canFinish}
                 onclick={() => void finish()}
               >
                 Done
-              </Button>
+              </button>
             </div>
             <UploadList items={items.value} onRetry={(id) => queue.retry(id)} />
-          </Stack>
+          </div>
         </div>
       </div>
     )
@@ -297,7 +295,12 @@ export const InjectPage = component(function* () {
     const ticket = params.value['ticket'] ?? ''
     const overrides = parseOverrides()
     if ('error' in overrides) {
-      return <FailedBody title="This link has a bad option" reason={overrides.error} />
+      return (
+        <div>
+          <Header trailing={null} />
+          <FailedBody title="This link has a bad option" reason={overrides.error} />
+        </div>
+      )
     }
     return <InjectSession key={ticket} ticket={ticket} connect={connect} readAccept={readAccept} />
   }

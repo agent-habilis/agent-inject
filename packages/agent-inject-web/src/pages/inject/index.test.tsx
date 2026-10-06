@@ -185,7 +185,8 @@ test('Done waits for uploads, finishes the session, and stops redialling', async
   doneButton().click()
   await settle()
   expect(connections[0]?.finishes).toBe(1)
-  expect(host.textContent).toContain('Finished — 1 file sent')
+  expect(host.textContent).toContain('Finished')
+  expect(host.textContent).toContain('1 file sent')
   expect(host.querySelector('[data-testid="add-file"]')).toBeNull()
 
   // The receiver closes the connection after done; that is not a drop.
@@ -266,11 +267,12 @@ test('Done starts disabled and turns primary once a file is saved', async () => 
   )
   await settle()
   expect(doneButton().disabled).toBe(true)
-  expect(doneButton().dataset['variant']).not.toBe('primary')
-  expect(doneButton().dataset['block']).toBe('true')
+  expect(doneButton().dataset['variant']).toBe('secondary')
+  expect(doneButton().closest('.buttons')).not.toBeNull()
 
   pick(['a.jpg'])
   await settle()
   expect(doneButton().disabled).toBe(false)
-  expect(doneButton().dataset['variant']).toBe('primary')
+  // Primitive's primary look is the default, so it carries no variant.
+  expect(doneButton().dataset['variant']).toBeUndefined()
 })

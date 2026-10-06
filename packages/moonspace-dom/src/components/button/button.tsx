@@ -56,6 +56,9 @@ const BUTTON = css({
   background: 'transparent',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
+  // A label is a control, not payload: dragging across it should not highlight
+  // it. Text that is the payload opts back in with `.selectable`.
+  userSelect: 'none',
   /*
    * Casing is the component's, not the caller's. `text-transform` is
    * presentation, so the accessible name keeps its capitalisation.

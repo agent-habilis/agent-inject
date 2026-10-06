@@ -1,10 +1,10 @@
 // First, before anything can build a Disposable. See the file for why.
 import './compat.ts'
 
-import { GlobalStyle, MoonspaceTheme } from 'moonspace-dom'
 import { component, render } from 'visage-dom'
 import { loadWasm } from 'agent-inject-wasm'
 
+import './styles/primitive/primitive.css'
 import './app.css'
 
 import { App } from './pages/index.ts'
@@ -18,11 +18,7 @@ if (!root) throw new Error('#root is missing from index.html')
 
 const Root = component(function* () {
   yield () => (
-    <>
-      {MoonspaceTheme()}
-      {GlobalStyle()}
-      <App />
-    </>
+    <App />
   )
 })
 
