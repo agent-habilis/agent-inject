@@ -1,4 +1,4 @@
-/** The top bar, after agent-share's: the app's name on the left, the link state on the right. */
+/** The top bar: the app's name on the left, the link state on the right. */
 
 import { Box, Stack, Text } from 'moonspace-dom'
 import type { Child } from 'visage-dom'

@@ -1,5 +1,6 @@
 /**
- * The three ways in: photos from the library, the camera, any file.
+ * The ways in, by what the session takes: photos from the library, the
+ * camera, any file. A `files` session shows only **Add files**.
  *
  * Each handler opens its picker before anything else happens. The picker
  * spends the click's user activation, and an `await` in front of it turns the
@@ -8,13 +9,17 @@
 
 import { Button, Stack } from 'moonspace-dom'
 
+import type { Accept } from '../../lib/client/index.ts'
 import { isAbort, pickFiles } from '../../lib/pick-files/index.ts'
 
 export interface AddButtonsProps {
   onFiles: (files: File[]) => void
   onCamera: () => void
-  /** Hide the any-file picker: the session takes photos only. */
-  photosOnly?: boolean
+  /**
+   * What the session takes. `images` hides the any-file picker, and `files`
+   * hides the photo picker and the camera.
+   */
+  mode?: Accept
 }
 
 function pick(options: Parameters<typeof pickFiles>[0], onFiles: (files: File[]) => void): void {
@@ -23,7 +28,21 @@ function pick(options: Parameters<typeof pickFiles>[0], onFiles: (files: File[])
   })
 }
 
-export function AddButtons({ onFiles, onCamera, photosOnly = false }: AddButtonsProps) {
+export function AddButtons({ onFiles, onCamera, mode = 'any' }: AddButtonsProps) {
+  if (mode === 'files') {
+    return (
+      <Stack direction="column" gap={1}>
+        <Button
+          variant="secondary"
+          block
+          data-testid="add-file"
+          onclick={() => pick({ multiple: true }, onFiles)}
+        >
+          Add files
+        </Button>
+      </Stack>
+    )
+  }
   return (
     <Stack direction="column" gap={1}>
       <Button
@@ -37,7 +56,7 @@ export function AddButtons({ onFiles, onCamera, photosOnly = false }: AddButtons
       <Button variant="secondary" block data-testid="camera" onclick={() => onCamera()}>
         Camera
       </Button>
-      {photosOnly ? null : (
+      {mode === 'images' ? null : (
         <Button
           variant="secondary"
           block

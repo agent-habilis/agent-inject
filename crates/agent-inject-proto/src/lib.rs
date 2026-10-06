@@ -13,7 +13,7 @@
 //! shifts a byte fails loudly; when the change is intended, update the test in
 //! the same commit.
 
-pub use fofoca_protocol::ct_eq;
+pub use habilis_network_protocol::ct_eq;
 
 pub use self::framing::{
     CLOSE_UNAUTHORIZED, RequestHeader, Response, SECRET_LEN, Status, TRANSPORT, UPLOAD_ALPN,

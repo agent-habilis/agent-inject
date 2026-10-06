@@ -1,0 +1,50 @@
+# What the image build reads is short: the root cargo manifests,
+# `.cargo/config.toml`, `rust-toolchain.toml`, `crates/`, `tasks/` (only so the
+# root workspace's member list resolves), the root JS manifests, `packages/`,
+# `scripts/` and `types/`. Everything named here is large, host-specific, or a
+# build output that has to be regenerated inside the image.
+#
+# Unlike .gitignore, a bare name matches only at the context root; `**/` is what
+# reaches nested directories.
+
+# Rust build trees. The wasm client is excluded from the root workspace and so
+# has one of its own.
+target
+crates/agent-inject-wasm-client/target
+
+# Front-end installs and output: reinstalled and rebundled in the image.
+**/node_modules
+dist
+
+# Where the wasm and its glue land, plus the hash of this machine's last build.
+# All gitignored and therefore present in every working checkout. Copying any of
+# them in would let a stale host build become the image's wasm, which the
+# content-addressed name in `scripts/wasm-asset.ts` exists to prevent.
+packages/agent-inject-wasm/src/path.ts
+packages/agent-inject-wasm/src/glue
+
+# Nothing in the image build reads git metadata, and `cargo task
+# publish-web-image` resolves the tag on the host before calling docker.
+.git
+.gitignore
+
+# Not part of the web app.
+docs
+skills
+deploy
+.claude
+.github
+README.md
+LICENSE
+clippy.toml
+rustfmt.toml
+
+# Editor and OS noise.
+**/.DS_Store
+**/*.swp
+**/.idea
+**/.vscode
+
+# Never send secrets, whatever else moves above.
+**/.env
+**/.env.*

@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 xshell = "0.2"
 # Cargo-style status output, shared with the binary by `include!`ing its
 # canonical source (`../crates/agent-inject/src/util/output.rs`).

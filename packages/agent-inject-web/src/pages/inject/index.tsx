@@ -77,8 +77,8 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
   )
   const items = signal<readonly Item[]>([])
   const cameraOpen = signal(false)
-  // Unknown until the ticket is read. The file picker stays hidden until
-  // then, so a photos-only page never flashes it.
+  // Unknown until the ticket is read. No add buttons show until then, so a
+  // page never flashes buttons its session does not take.
   const accept = signal<Accept | null>(null)
   if (looksLikeTicket(ticket)) {
     props.readAccept(ticket).then(
@@ -256,13 +256,15 @@ export const InjectSession = component(function* (props: InjectSessionProps) {
               </Box>
             ) : (
               <div style={BUTTONS}>
-                <AddButtons
-                  photosOnly={accept.value !== 'any'}
-                  onFiles={add}
-                  onCamera={() => {
-                    cameraOpen.value = true
-                  }}
-                />
+                {accept.value === null ? null : (
+                  <AddButtons
+                    mode={accept.value}
+                    onFiles={add}
+                    onCamera={() => {
+                      cameraOpen.value = true
+                    }}
+                  />
+                )}
               </div>
             )}
             <div style={BUTTONS}>

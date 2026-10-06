@@ -55,7 +55,7 @@ fn web_app(sh: &Shell) -> TaskOutcome {
 }
 
 /// The WebRTC transport id and signal envelope are owned by
-/// `fofoca-iroh-webrtc-transport`. Peers that disagree on either fail to
+/// `habilis-network-iroh-webrtc-transport`. Peers that disagree on either fail to
 /// connect with no useful error, so a local copy must fail the gate.
 fn no_redeclared_wire_constants(sh: &Shell) -> TaskOutcome {
     output::status("Checking", "no redeclared wire constants");
@@ -67,7 +67,7 @@ fn no_redeclared_wire_constants(sh: &Shell) -> TaskOutcome {
         let files: Vec<_> = hits.lines().filter(|line| !line.is_empty()).collect();
         if !files.is_empty() {
             return Err(format!(
-                "`{needle}` is owned by fofoca-iroh-webrtc-transport and must not be \
+                "`{needle}` is owned by habilis-network-iroh-webrtc-transport and must not be \
                  redeclared here, found in {files:?}"
             )
             .into());

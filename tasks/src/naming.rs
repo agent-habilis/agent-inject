@@ -163,8 +163,8 @@ fn zone_of(prefix: &[&str], roots: &BTreeSet<String>) -> Zone {
     {
         return Zone::Kebab;
     }
-    // Snake only where Cargo looks for modules. Anything else under a crate,
-    // like `skills/`, is content, and keeps the repo's kebab-case.
+    // Snake only where Cargo looks for modules. Anything else under a crate
+    // is content, and keeps the repo's kebab-case.
     let inside_crate = roots.iter().any(|root| {
         !root.is_empty()
             && RUST_PATHS
@@ -330,18 +330,16 @@ mod tests {
 
     #[test]
     fn content_under_a_crate_outside_its_rust_paths_is_kebab() {
-        // A skill folder is the slash-command name; agents read `SKILL.md`.
-        assert!(zone("crates/agent-inject/skills") == Zone::Kebab);
-        assert!(zone("crates/agent-inject/skills/inject-photo") == Zone::Kebab);
-        assert!(is_valid(
-            "inject-photo",
-            zone("crates/agent-inject/skills/inject-photo")
-        ));
-        assert!(is_valid("SKILL.md", Zone::Kebab));
+        assert!(zone("crates/agent-inject/docs") == Zone::Kebab);
+        assert!(zone("crates/agent-inject/docs/some-note") == Zone::Kebab);
     }
 
     #[test]
     fn everything_outside_a_crate_is_kebab() {
+        // A skill folder is the slash-command name; agents read `SKILL.md`.
+        assert!(zone("skills") == Zone::Kebab);
+        assert!(is_valid("inject-photo", zone("skills/inject-photo")));
+        assert!(is_valid("SKILL.md", Zone::Kebab));
         assert!(zone("packages/agent-inject-web/src/lib/peer-card") == Zone::Kebab);
         assert!(zone("scripts/build-ip-country.ts") == Zone::Kebab);
     }

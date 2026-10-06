@@ -2,7 +2,7 @@
 //! in one string.
 
 use anyhow::{Context, Result, bail};
-use fofoca_protocol::iroh_base::EndpointAddr;
+use habilis_network_protocol::iroh_base::EndpointAddr;
 
 use crate::framing::SECRET_LEN;
 use crate::lookup::LookupOpts;
@@ -36,6 +36,9 @@ pub enum Accept {
     #[default]
     Any,
     Images,
+    /// Any file, and a page with only **Add files**: no photo picker, no
+    /// camera.
+    Files,
 }
 
 impl Accept {
@@ -45,6 +48,7 @@ impl Accept {
         match self {
             Accept::Any => "any",
             Accept::Images => "images",
+            Accept::Files => "files",
         }
     }
 
@@ -52,6 +56,7 @@ impl Accept {
         match self {
             Accept::Any => 0,
             Accept::Images => 1,
+            Accept::Files => 2,
         }
     }
 
@@ -59,6 +64,7 @@ impl Accept {
         Ok(match byte {
             0 => Accept::Any,
             1 => Accept::Images,
+            2 => Accept::Files,
             other => bail!("unknown accept mode in ticket: {other}"),
         })
     }
@@ -125,7 +131,7 @@ impl InjectTicket {
 
 #[cfg(test)]
 mod tests {
-    use fofoca_protocol::iroh_base::{EndpointAddr, SecretKey};
+    use habilis_network_protocol::iroh_base::{EndpointAddr, SecretKey};
 
     use super::{Accept, InjectTicket};
     use crate::lookup::{LookupOpts, RelayChoice};
@@ -186,7 +192,7 @@ mod tests {
 
     #[test]
     fn accept_round_trips() {
-        for accept in [Accept::Any, Accept::Images] {
+        for accept in [Accept::Any, Accept::Images, Accept::Files] {
             let original = InjectTicket {
                 accept,
                 ..ticket(LookupOpts::loopback())
@@ -200,6 +206,7 @@ mod tests {
     fn accept_labels_are_pinned() {
         assert_eq!(Accept::Any.label(), "any");
         assert_eq!(Accept::Images.label(), "images");
+        assert_eq!(Accept::Files.label(), "files");
     }
 
     #[test]

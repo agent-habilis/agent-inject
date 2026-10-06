@@ -54,7 +54,7 @@ stays out of the result.
 |---|---|
 | `--output human\|json` | Output format. Default: `human`. |
 | `--no-qr` | Do not print the QR code. |
-| `--accept any\|images` | What the phone can send. `images` removes **Add file** from the page, and the command refuses other files. Default: `any`. |
+| `--accept any\|images\|files` | What the phone can send. `images` removes **Add file** from the page, and the command refuses other files. `files` shows only **Add files** and **Done**, with no photo picker and no camera. Default: `any`. |
 
 The link opens `https://inject.agent-habilis.com`. `AGENT_INJECT_WEB_ORIGIN`
 sets another origin, for a dev server or a tunnel.
@@ -73,6 +73,9 @@ agent-inject unplug   # remove them
   starts `agent-inject --accept images` in the background and shows the link
   and the QR code. When you press **Done**, the command stops and the agent
   gets the paths of the photos.
+- `/inject-files` receives files of any type. The agent starts
+  `agent-inject --accept files`. The phone page shows only **Add files** and
+  **Done**, and the agent gets the paths of the files.
 
 To try a skill against a local page, run `bun run dev:phone`, and set
 `AGENT_INJECT_WEB_ORIGIN=https://<this machine>:8443` in the shell that starts
@@ -87,6 +90,7 @@ Prerequisites: Rust (the toolchain in `rust-toolchain.toml`), the
 ```sh
 cargo task ci         # the full gate: names, fmt, clippy, tests, web, wasm
 cargo task web-wasm   # build the browser client into packages/agent-inject-wasm
+cargo task publish-web-image   # build the web app image (linux/arm64) and push it to the Gitea registry
 bun run dev           # web app with hot reload on :3000/app (next free port up to :3009)
 bun run build         # production bundle into dist/
 bun run start         # serve dist/
@@ -100,6 +104,24 @@ AGENT_INJECT_WEB_ORIGIN=http://localhost:3417 cargo run -- /tmp/inbox
 ```
 
 The camera needs a secure context. `localhost` is one. A phone needs HTTPS.
+
+### Deploy the web app
+
+`cargo task publish-web-image` builds the web app as a container image and
+pushes it to a container registry, tagged with the short commit sha (`-dirty`
+when the image inputs have uncommitted changes) and `latest`. The build is
+hermetic: the `Dockerfile` rebuilds the wasm from source. It needs a running
+Docker daemon, and a `docker login` to the registry.
+
+```sh
+export AGENT_INJECT_REGISTRY=registry.example.com        # or pass --registry
+export AGENT_INJECT_REGISTRY_OWNER=my-org                # or pass --owner
+cargo task publish-web-image                             # --no-push builds only
+```
+
+`--platform` picks `linux/arm64` (the default) or `linux/amd64`. On the host,
+copy `deploy/compose.example.yaml`, set the image to the one you pushed, and run
+`docker compose up -d`. The file explains the loopback port and the TLS step.
 
 ### Test on your phone
 
@@ -155,9 +177,8 @@ An option that is not valid stops the page with the reason.
 | `packages/visage-*`, `packages/moonspace*` | Vendored UI kit. See `docs/vendoring.md`. |
 | `tasks/` | `cargo task`. |
 
-The transport comes from [agent-share](https://github.com/agent-habilis/agent-share):
-iroh QUIC over a WebRTC data channel, through
-[fofoca](https://github.com/fofoca-network/fofoca).
+The transport is iroh QUIC over a WebRTC data channel, through
+[habilis-network](https://github.com/agent-habilis/habilis-network).
 
 ## License
 

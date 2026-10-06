@@ -1,0 +1,35 @@
+# The web app on a Docker host. Copy this file to the host, set `image:` to the
+# one you pushed with `cargo task publish-web-image`, and run
+# `docker compose up -d`, after `docker login <registry>`.
+#
+# The image is built for linux/arm64 by default. A host with another
+# architecture refuses it with "no matching manifest"; build it with
+# `--platform linux/amd64` for an amd64 host.
+#
+# The port is bound to loopback deliberately. The camera and the service worker
+# only exist in a secure context, so a browser reaching this over plain http on
+# a LAN address gets neither. Put TLS in front of it, for example a reverse
+# proxy, or `tailscale serve --bg --https=443 http://127.0.0.1:3000` to keep it
+# on a tailnet.
+
+services:
+  agent-inject-web:
+    image: registry.example.com/my-org/agent-inject-web:latest
+    container_name: agent-inject-web
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    # Nothing is written at runtime: the server only reads `dist/`.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

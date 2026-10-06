@@ -1,10 +1,9 @@
-//! The token codec shared by every agent-habilis token — here the inject
-//! ticket ([`crate::ticket`]); in agent-share the mount ticket, in
-//! agent-habilis/swarm the swarm id and the pipe/port/file/sh tickets. One
-//! wire shape for every token, so a token string self-describes its kind via a
-//! 1-byte type tag and the namespaces never collide. The full [`TokenType`]
-//! enum is kept as wire documentation, and so another tool's token decodes to
-//! a clean "wrong token type" error rather than an "unknown type" one.
+//! The token codec for agent-habilis tokens — here the inject ticket
+//! ([`crate::ticket`]). One wire shape for every token, so a token string
+//! self-describes its kind via a 1-byte type tag and the namespaces never
+//! collide. The full [`TokenType`] enum is kept as wire documentation, and so
+//! another tool's token decodes to a clean "wrong token type" error rather
+//! than an "unknown type" one.
 //!
 //! Wire: Base58Check(`version ‖ type ‖ payload`) with a `SHA256d` checksum.
 //! Unprefixed and entirely ASCII, so a token drops into a URL path segment
@@ -143,8 +142,7 @@ mod tests {
 
     #[test]
     fn type_bytes_are_pinned_wire_format() {
-        // Interop tripwire: these bytes are shared with agent-habilis/swarm's
-        // `ahsw` and agent-share, and must never drift.
+        // Wire tripwire: these bytes must never drift.
         for (kind, byte) in [
             (TokenType::Swarm, 1u8),
             (TokenType::Pipe, 2),

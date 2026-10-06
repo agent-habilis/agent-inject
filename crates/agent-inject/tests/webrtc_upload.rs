@@ -12,9 +12,9 @@ use agent_inject::test_support::{
 };
 use agent_inject_proto::lookup::LookupOpts;
 use agent_inject_proto::{Accept, RequestHeader, Status, UPLOAD_ALPN};
-use fofoca::iroh::endpoint::presets;
-use fofoca::iroh::{Endpoint, RelayMode, SecretKey};
-use fofoca_iroh_webrtc_transport::{IceConfig, WebRtcHandle, WebRtcTransport};
+use habilis_network::iroh::endpoint::presets;
+use habilis_network::iroh::{Endpoint, RelayMode, SecretKey};
+use habilis_network_iroh_webrtc_transport::{IceConfig, WebRtcHandle, WebRtcTransport};
 use sha2::{Digest, Sha256};
 
 /// Host candidates only: the default config asks public STUN, which would

@@ -202,7 +202,7 @@ fn accepts(accept: Accept, name: &str) -> bool {
     const IMAGE_EXTENSIONS: &[&str] =
         &["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "avif"];
     match accept {
-        Accept::Any => true,
+        Accept::Any | Accept::Files => true,
         Accept::Images => std::path::Path::new(name)
             .extension()
             .and_then(|ext| ext.to_str())

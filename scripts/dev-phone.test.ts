@@ -4,12 +4,12 @@ import { localHeaders, parseStatus, portInUse } from './dev-phone.ts'
 
 const running = {
   BackendState: 'Running',
-  CertDomains: ['cg-macbook.tetra-ostrich.ts.net'],
-  Self: { DNSName: 'cg-macbook.tetra-ostrich.ts.net.' },
+  CertDomains: ['my-mac.example.ts.net'],
+  Self: { DNSName: 'my-mac.example.ts.net.' },
 }
 
 test('a running node with certs yields its DNS name without the trailing dot', () => {
-  expect(parseStatus(running)).toEqual({ dns: 'cg-macbook.tetra-ostrich.ts.net' })
+  expect(parseStatus(running)).toEqual({ dns: 'my-mac.example.ts.net' })
 })
 
 test('a stopped node, missing certs, or no DNS name is refused with a reason', () => {
@@ -30,9 +30,9 @@ test('a port is in use when the serve config has a TCP handler for it', () => {
 
 test('proxied requests look local to the dev server', () => {
   const incoming = new Headers({
-    host: 'cg-macbook.tetra-ostrich.ts.net:8443',
-    origin: 'https://cg-macbook.tetra-ostrich.ts.net:8443',
-    referer: 'https://cg-macbook.tetra-ostrich.ts.net:8443/app/inject/abc',
+    host: 'my-mac.example.ts.net:8443',
+    origin: 'https://my-mac.example.ts.net:8443',
+    referer: 'https://my-mac.example.ts.net:8443/app/inject/abc',
     'accept-encoding': 'br',
   })
   const out = localHeaders(incoming, new URL('http://localhost:3000'))

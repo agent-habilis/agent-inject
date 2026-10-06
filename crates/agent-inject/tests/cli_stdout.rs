@@ -103,6 +103,39 @@ async fn json_stdout_is_the_url_one_path_per_file_then_done() {
 }
 
 #[tokio::test]
+async fn accept_files_puts_the_mode_in_the_ticket_and_takes_any_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agent-inject"))
+        .args(["--loopback", "--output", "json", "--accept", "files"])
+        .arg(dir.path())
+        .env("AGENT_INJECT_WEB_ORIGIN", "https://example.test")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn agent-inject");
+    let start = line(&mut BufReader::new(child.stdout.take().unwrap()));
+    let url = start["url"].as_str().unwrap();
+    let ticket = InjectTicket::decode(url.rsplit('/').next().unwrap()).unwrap();
+    assert_eq!(ticket.accept, Accept::Files);
+
+    let endpoint = loopback_sender().await.unwrap();
+    let conn = endpoint
+        .connect(ticket.addr.clone(), UPLOAD_ALPN)
+        .await
+        .unwrap();
+    let header = RequestHeader {
+        secret: ticket.secret,
+        upload_id: [1; 16],
+        name: "notes.pdf".to_owned(),
+        size: 3,
+    };
+    let response = upload(&conn, &header, b"abc").await.unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert_eq!(response.status, Status::Ok);
+}
+
+#[tokio::test]
 async fn accept_images_puts_the_mode_in_the_ticket_and_refuses_other_files() {
     let dir = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_agent-inject"))

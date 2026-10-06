@@ -10,7 +10,7 @@
  * The crate is a standalone workspace, so cargo runs from its directory.
  */
 
-import { relative } from 'node:path'
+import { delimiter, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { $ } from 'bun'
@@ -77,6 +77,17 @@ async function wasmClang(): Promise<string | null> {
   return version.includes('Apple clang') ? null : 'clang'
 }
 
+/**
+ * The `bin/` of the toolchain that `rust-toolchain.toml` pins, or `null` when
+ * `rustup` is not on the `PATH`. A `cargo` found first on the `PATH` (a
+ * Homebrew or distro Rust) ignores the pin and lacks the wasm target, so the
+ * build puts the pinned toolchain's own `cargo` and `rustc` first.
+ */
+async function pinnedToolchainBin(): Promise<string | null> {
+  const found = await $`rustup which cargo`.cwd(CRATE_DIR).nothrow().quiet()
+  return found.exitCode === 0 ? dirname(found.text().trim()) : null
+}
+
 /** The `wasm-bindgen` version the crate actually links against. */
 async function lockedBindgenVersion(): Promise<string> {
   const lock = await Bun.file(new URL('Cargo.lock', CRATE)).text()
@@ -112,10 +123,16 @@ export async function buildWasm(): Promise<void> {
     console.warn('  no wasm-capable clang found — if ring fails, `brew install llvm`')
   }
 
+  const toolchainBin = await pinnedToolchainBin()
+  const extra: Record<string, string> = clang
+    ? { CC: clang, [`CC_${TARGET.replaceAll('-', '_')}`]: clang }
+    : {}
+  if (toolchainBin) extra['PATH'] = [toolchainBin, process.env['PATH'] ?? ''].join(delimiter)
+
   console.log(`  building agent-inject-wasm-client (${TARGET}, release)`)
   await $`cargo build --release --target ${TARGET}`
     .cwd(CRATE_DIR)
-    .env(cargoEnv(clang ? { CC: clang, [`CC_${TARGET.replaceAll('-', '_')}`]: clang } : {}))
+    .env(cargoEnv(extra))
 
   const outDir = fileURLToPath(GLUE_DIR)
   const bindgen = await $`wasm-bindgen --target web --out-dir ${outDir} ${ARTIFACT}`

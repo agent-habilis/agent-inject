@@ -31,8 +31,8 @@ pub mod test_support {
     use agent_inject_proto::lookup::LookupOpts;
     use agent_inject_proto::{RequestHeader, Response};
     use anyhow::{Context, Result};
-    use fofoca::iroh::endpoint::Connection;
-    use fofoca::iroh::{Endpoint, SecretKey};
+    use habilis_network::iroh::endpoint::Connection;
+    use habilis_network::iroh::{Endpoint, SecretKey};
 
     pub use crate::serve::{ServeOpts, Session, serve_with};
     pub use crate::webrtc::{dial_webrtc, ensure_webrtc_selected, webrtc_only_addr};

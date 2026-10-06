@@ -1,8 +1,8 @@
 //! The browser half of agent-inject: dial the receiver named by a ticket over
 //! a WebRTC data channel and stream files to it.
 //!
-//! The connect path is agent-share's browser client, trimmed to one peer and
-//! no mesh. TypeScript never touches the wire format; it calls these exports.
+//! The connect path dials one peer. TypeScript never touches the wire format;
+//! it calls these exports.
 
 use std::sync::Arc;
 
@@ -10,9 +10,11 @@ use agent_inject_proto::lookup::RelayChoice;
 use agent_inject_proto::{
     InjectTicket, SECRET_LEN, TRANSPORT, UPLOAD_ALPN, UPLOAD_ID_LEN, WEBRTC_SIGNAL_ALPN,
 };
-use fofoca::iroh::endpoint::{Connection, presets};
-use fofoca::iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey, TransportAddr};
-use fofoca_iroh_webrtc_transport::{
+use habilis_network::iroh::endpoint::{Connection, presets};
+use habilis_network::iroh::{
+    Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey, TransportAddr,
+};
+use habilis_network_iroh_webrtc_transport::{
     BrowserHubTransport, BrowserSession, IceServers, MAX_ENVELOPE_BYTES, SignalEnvelope,
     WebRtcHandle, browser_offer, custom_addr,
 };
@@ -176,7 +178,7 @@ fn signal_relay_mode(choice: &RelayChoice, overrides: &[String]) -> Result<Relay
     let urls = overrides
         .iter()
         .map(|raw| {
-            raw.parse::<fofoca::iroh::RelayUrl>()
+            raw.parse::<habilis_network::iroh::RelayUrl>()
                 .map_err(|error| err(&format!("relay URL {raw}"), &error))
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -401,7 +403,7 @@ fn path_label(addr: &TransportAddr) -> String {
         TransportAddr::Relay(_) => "relay".to_owned(),
         TransportAddr::Ip(_) => "ip".to_owned(),
         TransportAddr::Custom(custom)
-            if custom.id() == fofoca_iroh_webrtc_transport::WEBRTC_TRANSPORT_ID =>
+            if custom.id() == habilis_network_iroh_webrtc_transport::WEBRTC_TRANSPORT_ID =>
         {
             "webrtc".to_owned()
         }
@@ -423,7 +425,7 @@ async fn wait_ms(millis: i32) {
     let _ = JsFuture::from(promise).await;
 }
 
-/// The relay ladder the ticket names. `Pinned` resolves through fofoca, the
+/// The relay ladder the ticket names. `Pinned` resolves through habilis-network, the
 /// same list the CLI uses, so both ends home on the same rungs.
 fn relay_mode(choice: &RelayChoice) -> RelayMode {
     match choice {
@@ -433,8 +435,8 @@ fn relay_mode(choice: &RelayChoice) -> RelayMode {
     }
 }
 
-fn pinned_ladder() -> Vec<fofoca::iroh::RelayUrl> {
-    fofoca::net::relay_ladder(&fofoca::protocol::RelayChoice::Pinned)
+fn pinned_ladder() -> Vec<habilis_network::iroh::RelayUrl> {
+    habilis_network::net::relay_ladder(&habilis_network::protocol::RelayChoice::Pinned)
 }
 
 fn err(context: &str, error: &impl std::fmt::Display) -> JsValue {
@@ -469,7 +471,7 @@ mod tests {
         assert!(
             relay_mode(&LookupOpts::loopback().relay)
                 .relay_map()
-                .urls::<Vec<fofoca::iroh::RelayUrl>>()
+                .urls::<Vec<habilis_network::iroh::RelayUrl>>()
                 .is_empty()
         );
     }
@@ -478,14 +480,14 @@ mod tests {
     fn a_relay_override_replaces_the_ticket_ladder() {
         let url = "https://relay.example/".to_owned();
         let home = signal_relay_mode(&RelayChoice::Pinned, std::slice::from_ref(&url)).unwrap();
-        let offered: Vec<fofoca::iroh::RelayUrl> = home.relay_map().urls();
+        let offered: Vec<habilis_network::iroh::RelayUrl> = home.relay_map().urls();
         assert_eq!(offered, vec![url.parse().unwrap()]);
 
         let default = signal_relay_mode(&RelayChoice::Pinned, &[]).unwrap();
         assert_eq!(
             default
                 .relay_map()
-                .urls::<Vec<fofoca::iroh::RelayUrl>>()
+                .urls::<Vec<habilis_network::iroh::RelayUrl>>()
                 .len(),
             pinned_ladder().len()
         );
@@ -500,8 +502,8 @@ mod tests {
     #[test]
     fn parse_ticket_returns_what_the_session_accepts() {
         let ticket = agent_inject_proto::InjectTicket {
-            addr: fofoca::iroh::EndpointAddr::new(
-                fofoca::iroh::SecretKey::from_bytes(&[3u8; 32]).public(),
+            addr: habilis_network::iroh::EndpointAddr::new(
+                habilis_network::iroh::SecretKey::from_bytes(&[3u8; 32]).public(),
             ),
             secret: [5u8; 32],
             lookups: agent_inject_proto::lookup::LookupOpts::loopback(),
@@ -510,6 +512,14 @@ mod tests {
         assert_eq!(
             InjectClient::parse_ticket(&ticket.encode()).unwrap(),
             "images"
+        );
+        let files = agent_inject_proto::InjectTicket {
+            accept: agent_inject_proto::Accept::Files,
+            ..ticket
+        };
+        assert_eq!(
+            InjectClient::parse_ticket(&files.encode()).unwrap(),
+            "files"
         );
     }
 }

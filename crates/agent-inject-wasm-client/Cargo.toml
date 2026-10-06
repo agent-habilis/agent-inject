@@ -18,11 +18,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 agent-inject-proto = { path = "../agent-inject-proto" }
 # Portable half only: `host` pulls in signals, sockets and the filesystem,
-# none of which exist in a tab. The rev must stay in step with the root
+# none of which exist in a tab. The paths must match the root
 # workspace's.
-fofoca = { git = "https://github.com/fofoca-network/fofoca", rev = "41512471077f61716c019f87f5c96d403d399967", default-features = false }
-fofoca-iroh-webrtc-transport = { git = "https://github.com/fofoca-network/fofoca", rev = "41512471077f61716c019f87f5c96d403d399967", features = ["web"] }
-# NOTE: no iroh entries -- taken from `fofoca::iroh`.
+habilis-network = { path = "../../../../habilis-network/main/crates/habilis-network", default-features = false }
+habilis-network-iroh-webrtc-transport = { path = "../../../../habilis-network/main/crates/habilis-network-iroh-webrtc-transport", features = ["web"] }
+# NOTE: no iroh entries -- taken from `habilis_network::iroh`.
 anyhow = "1"
 serde_json = "1"
 wasm-bindgen = "0.2"
@@ -39,7 +39,7 @@ getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 # The unit tests run on wasm32, the only target this crate builds for: off
-# wasm32, `fofoca` turns on the transport's `native` backend and
+# wasm32, `habilis-network` turns on the transport's `native` backend and
 # `WebRtcHandle` stops being the browser one.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
